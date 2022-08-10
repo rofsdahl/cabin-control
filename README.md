@@ -3,7 +3,7 @@ This project is a temperature control system for use in a remote location (e.g. 
 
 The system consists of an ESP32 microcontroller from Espressif and one or more Dallas/Maxim DS18B20 digital temperature sensors. The desired temperature is achieved by continuously switching on/off one or more electrical heaters using Nexa power plugs (over RF 433 MHz). The ESP32 device periodically connects to the Internet over WiFi, logging the current temperature into a Google spreadsheet. The spreadsheet is also used for setting the desired temperature, which will be transferred to the device during the next synchronization.
 
-The ESP32 code is written in Arduino-style C/C++. Integration with Google spreadsheet is done using a Google Apps Script (javascript).
+The ESP32 code is written in Arduino-style C/C++. Integration with Google spreadsheet is done using Google Apps Script (javascript).
 
 ## User interface
 

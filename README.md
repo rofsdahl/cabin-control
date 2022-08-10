@@ -19,12 +19,12 @@ The bottom line displays the current status of configured power plugs:
 * ○: off
 * ●: on
 
-The current device activity is displayed to the right:
-* **Nexa:** Device is transmitting control signals to power plugs
+The current device activity is displayed at bottom right:
+* **Nexa:** Device is transmitting control signals to power plugs (every 5 minutes)
 * **WiFi:** Device is connecting to WiFi
-* **Time:** Device is updating time from NTP
+* **Time:** Device is updating time from NTP (once per day)
 * **Sync:** Device is synchronizing with Google spreadsheet
-* **Idle:** Device uptime is displayed
+* **&lt;time&gt;:** Device uptime is displayed when the device is "idle" (only monitoring temperatures)
 
 The two buttons are used for adjusting the desired temperature locally (when you are on-site):
 * M: Toggle between temperature modes: frost protection / comfort mode
@@ -80,6 +80,8 @@ The menu system contains functionality for:
 ![FS1000A](images/FS1000A.jpg)
 
 [FS1000A/XD-FST Datasheet](http://www.mantech.co.za/Datasheets/Products/433Mhz_RF-TX&RX.pdf)
+
+I've had most success using a straight solid core wire antenna (quarter wave-length, 17.3 cm), rather than the antenna coil shown on the picture.
 
 ## Wiring
 

@@ -17,9 +17,6 @@ function doGet(e) {
 
   updateCell("Errors", getParam(e, "errCount"));
 
-  var response = {}
-  response["syncInterval"] = readCell("Sync interval", 60);
-
   // Scheduled temp change?
   var scheduleTime = new Date(readCell("Schedule time", ""));
   var scheduleTemp = readCell("Schedule temp", "");
@@ -39,6 +36,8 @@ function doGet(e) {
   else {
     setTemp = readCell("Set temp", 10);
   }
+
+  var response = {}
   response["setTemp"] = setTemp;
 
   // Log temperatures
@@ -55,16 +54,19 @@ function doGet(e) {
     }
   });
 
-  var tempSheetName = Utilities.formatString("%04d-%02d", timestamp.getFullYear(), timestamp.getMonth()+1)
-  var tempSheet = getSheet(tempSheetName, 1);
-  tempSheet.getRange(1, 1, 1, headerValues.length)
-           .setValues([headerValues])
-           .setFontWeight("bold");
-  tempSheet.appendRow(row)
-           .autoResizeColumns(1, headerValues.length);
+  var logName = Utilities.formatString("%04d-%02d", timestamp.getFullYear(), timestamp.getMonth()+1)
+  var logSheet = getSheet(logName, 1);
+  logSheet.getRange(1, 1, 1, headerValues.length)
+          .setValues([headerValues])
+          .setFontWeight("bold");
+  logSheet.appendRow(row)
+          .autoResizeColumns(1, headerValues.length);
 
   // Update status for extra outputs
+  // This is done AFTER updating temperatures, since the values may be defined by formulas
   getParams(e, "output").forEach(it => response["output."+it] = readCell("Output "+it, 0));
+
+  response["syncInterval"] = readCell("Sync interval", 60);
 
   return ContentService
     .createTextOutput(JSON.stringify(response))
@@ -94,7 +96,7 @@ function readCell(key, defaultValue) {
     return cell.getValue();
   }
   else {
-    getConfigSheet().appendRow([key, defaultValue])
+    getStatusSheet().appendRow([key, defaultValue])
     return defaultValue;
   }
 }
@@ -105,13 +107,13 @@ function updateCell(key, value) {
     return cell.setValue(value);
   }
   else {
-    getConfigSheet().appendRow([key, value])
+    getStatusSheet().appendRow([key, value])
     return findCell(key);
   }
 }
 
 function findCell(key) {
-  var sheet = getConfigSheet();
+  var sheet = getStatusSheet();
   for (var row = 1; row <= 20; row++) {
     var r = sheet.getRange(row, 1);
     if (r.getValue() == key) {
@@ -121,8 +123,8 @@ function findCell(key) {
   return null;
 }
 
-function getConfigSheet() {
-  return getSheet("config", 0);
+function getStatusSheet() {
+  return getSheet("status", 0);
 }
 
 function getSheet(name, insertIndex) {

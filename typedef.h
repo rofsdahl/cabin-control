@@ -19,4 +19,5 @@ typedef struct {
   bool lastDisplayedState;
 } Nexa;
 
+
 #endif

@@ -81,7 +81,7 @@ The menu system contains functionality for:
 
 [FS1000A/XD-FST Datasheet](http://www.mantech.co.za/Datasheets/Products/433Mhz_RF-TX&RX.pdf)
 
-I've had most success using a straight solid core wire antenna (quarter wave-length, 17.3 cm), rather than the antenna coil shown on the picture.
+It might be better to use a straight solid core wire antenna (quarter wave-length, 17.3 cm), rather than the antenna coil shown on the picture.
 
 ## Wiring
 
@@ -108,6 +108,7 @@ I've had most success using a straight solid core wire antenna (quarter wave-len
   * **Events runs on:** Core 1
   * **Port:** (the COM port your board has connected to, see below)
 * To determine on which COM port your board connects, do the following steps:
+  * If required, install [UART driver](https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers)
   * Unplug the board
   * Have a look at **Tools > Port** and remember which ports you see
   * Plug in the board to the USB port
@@ -135,12 +136,13 @@ Go to **Tools > Manage libraries** and install the following libraries:
 # Configuration
 
 ## Configuration file
-Use the file `config.h.template` to create a configuration file `config.h` and insert:
+Use the file `config.h.sample` to create a configuration file `config.h` and insert:
 * WiFi connection properties
 * Google Apps Script ID (see below)
 * Temperature sensors:
   * name (Name of sensor, e.g "Livingroom" or "Outside")
   * address (8 bytes) (can be read using the utility menu system)
+    * Tip! Addresses of connected sensors will be printed to serial output - use Serial Monitor at 115000 baud
   * temp (only used internally, set it to 0)
 * Nexa switches:
   * name (Name of unit/room/area, e.g. "Livingroom")

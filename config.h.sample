@@ -8,18 +8,19 @@
 
 #define APPS_SCRIPT_ID "Google Apps Script ID"
 
-// Configure temperature sensors as described in doc, with:
-// Name, address, temperature (0)
-Sensor sensor[] = {
-  {"Livingroom", {0xCA, 0xFE, 0xBA, 0xBE, 0xCA, 0xFE, 0xBA, 0xBE}, 0},
-  {"Outside",    {0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD, 0xBE, 0xEF}, 0},
+// Configure zones with: Name, type, sensor address
+// Note! Use only US-ASCII characters in zone names
+// Note! First zone must be the primary auto-zone
+Zone zones[] = {
+  {"Livingroom", Auto,   {0xCA,0xFE,0xBA,0xBE,0xCA,0xFE,0xBA,0xBE}},
+  {"Outside",    Sensor, {0xDE,0xAD,0xBE,0xEF,0xDE,0xAD,0xBE,0xEF}},
+  {"Ext.light",  Manual, {                                       }},
 };
 
-// Configure Nexa power plugs as described in doc, with:
-// Name, type, id, linkedSensor, activeInMode, state (false), lastDisplayedState (false)
+// Configure Nexa power plugs with: Zone index, type, id
 Nexa nexa[] = {
-  {"Livingroom",    Simple,   0x000000A1,  0, -1, false, false},
-  {"Exterior lamp", Learning, 0xCAFEBABE, -1,  1, false, false},
+  {0, Simple,   0x000000A1},
+  {2, Learning, 0xCAFEBABE},
 };
 
 #endif

@@ -4,9 +4,9 @@
 #include <Arduino.h>
 
 enum NexaType {
-  Learning,
-  Simple,
-  He35,
+  LEARN  = 'L',
+  SIMPLE = 'S',
+  HE35   = 'H',
 };
 
 class NexaTx {

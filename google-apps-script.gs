@@ -43,11 +43,12 @@ function doGet(e) {
     // S (Sensor): Only sensor, no Nexa -> report temp, no device value
     // M (Manual): No senor, only Nexa  -> no temp, no device value
     let zone = it.split(";");
-    if (zone.length >= 4) {
+    if (zone.length >= 5) {
       let zoneName  = zone[0];
       let zoneType  = zone[1];
       let zoneTemp  = parseFloat(zone[2]);
       let zoneValue = zone[3];
+      let zoneDutyCycle = parseFloat(zone[4]);
 
       if (zoneType=="A" && zoneValue != -1) {
         // Reverse sync for Auto-zones, device -> sheet
@@ -59,6 +60,7 @@ function doGet(e) {
         // Manual zones may use a formula
         zoneValue = readCell("Zone "+zoneName, 0);
         response["zone."+zoneName] = zoneValue;
+        updateCell("Zone "+zoneName+" %", zoneDutyCycle);
       }
       if (zoneType=="A") {
         // Log set value only for Auto zone
@@ -70,6 +72,11 @@ function doGet(e) {
         updateCell("Temp "+zoneName, zoneTemp);
         headerValues.push(zoneName);
         row.push(zoneTemp);
+      }
+      if (zoneType=="A") {
+        // Log duty cycle only for Auto zone
+        headerValues.push(zoneName + " %");
+        row.push(zoneDutyCycle);
       }
     }
   });

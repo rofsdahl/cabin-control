@@ -27,13 +27,6 @@
 #define TIMEOUT_WIFI_RETRY     1000
 #define TIMEOUT_HTTP          20000
 
-// TODO: Use enum with defined values
-#define ACTIVITY_NONE 0
-#define ACTIVITY_NEXA 1
-#define ACTIVITY_WIFI 2
-#define ACTIVITY_TIME 3
-#define ACTIVITY_SYNC 4
-
 Preferences preferences;
 TFT_eSPI tft = TFT_eSPI();
 OneWire oneWire(SENSOR_PIN);
@@ -41,7 +34,7 @@ DallasTemperature dallas(&oneWire);
 NexaTx nexaTx = NexaTx(TX_PIN);
 Backlight backlight;
 
-byte activity = ACTIVITY_NONE;
+Activity activity = NONE;
 byte setMode;
 byte setTemp;
 byte prevTemp;
@@ -156,7 +149,7 @@ void adjustTime() {
 int getNumTempZones() {
   int numTempZones = 0;
   for (int i=0; i<numZones; i++) {
-    if (zones[i].type == Auto || zones[i].type == Sensor) {
+    if (zones[i].type == AUTO || zones[i].type == SENSOR) {
       numTempZones++;
     }
   }
@@ -166,7 +159,7 @@ int getNumTempZones() {
 int getTempZone(int n) {
   int t=0;
   for (int i=0; i<numZones; i++) {
-    if (zones[i].type == Auto || zones[i].type == Sensor) {
+    if (zones[i].type == AUTO || zones[i].type == SENSOR) {
       if (n==t) return i;
       else t++;
     }
@@ -209,24 +202,46 @@ void savePreferences() {
 void readTemperatures() {
   dallas.requestTemperatures();
   for (int i=0; i<numZones; i++) {
-    if (zones[i].type == Auto || zones[i].type == Sensor) {
+    if (zones[i].type == AUTO || zones[i].type == SENSOR) {
       zones[i].temp = dallas.getTempC(zones[i].sensorAddr);
     }
   }
 }
 
 void updateNexas() {
-  // TODO: Count/accumulate on-ratio here
   for (int i=0; i<numZones; i++) {
-    // Update state for Auto-zones
-    if (zones[i].type == Auto) {
+    bool newState = zones[i].state;
+    if (zones[i].type == AUTO) {
       float tempOffset = zones[i].state ? 0.1 : -0.1;
-      zones[i].state = zones[i].temp < (zones[i].value + tempOffset);
+      newState = zones[i].temp < (zones[i].value + tempOffset);
     }
-    // Update state for manual zones
-    if (zones[i].type == Manual) {
-      zones[i].state = zones[i].value > 0;
+    if (zones[i].type == MANUAL) {
+      newState = zones[i].value > 0;
     }
+
+    // Start / stop on-timer
+    if (!zones[i].state && newState) {
+      zones[i].tOn = millis();
+      Serial.print("Zone ");
+      Serial.print(zones[i].name);
+      Serial.print(" ON at ");
+      Serial.println(zones[i].tOn);
+    }
+    if (zones[i].state && !newState) {
+      unsigned long tPeriod = millis() - zones[i].tOn;
+      zones[i].tAccu += tPeriod;
+      Serial.print("Zone ");
+      Serial.print(zones[i].name);
+      Serial.print(" OFF at ");
+      Serial.print(millis());
+      Serial.print(" -> period = ");
+      Serial.print(tPeriod);
+      Serial.print(", accumulated = ");
+      Serial.println(zones[i].tAccu);
+    }
+
+    // Update state
+    zones[i].state = newState;
   }
 
   // Transmit current zone state for all Nexa power plugs
@@ -252,13 +267,35 @@ void synchronizeWithRemote(bool reverseSync) {
   url += errCount;
 
   for (int i=0; i<numZones; i++) {
+    // Accumulate on-timer, calculate and report on-ratio, reset on-timer
+    if (zones[i].state) {
+      unsigned long tPeriod = millis() - zones[i].tOn;
+      zones[i].tAccu += tPeriod;
+      zones[i].tOn = millis();
+    }
+    float dutyCycle = (float)zones[i].tAccu / (millis() - tLastSync);
+    Serial.print("Zone ");
+    Serial.print(zones[i].name);
+    Serial.print(" duty cycle: ");
+    Serial.print(zones[i].tAccu);
+    Serial.print(" / (");
+    Serial.print(millis());
+    Serial.print(" - ");
+    Serial.print(tLastSync);
+    Serial.print(") = ");
+    Serial.println(dutyCycle);
+
+    // Reset on-timer should ideally be done AFTER successful sync
+    zones[i].tAccu = 0;
+
     char zoneStr[30];
-    // Reverse sync only zone 0
-    snprintf(zoneStr, sizeof(zoneStr), "%s;%c;%.1f;%d",
+    // Currently reverse syncing only zone 0
+    snprintf(zoneStr, sizeof(zoneStr), "%s;%c;%.1f;%d;%.2f",
              zones[i].name,
              zones[i].type,
              zones[i].temp,
-             (reverseSync && i==0) ? zones[i].value : -1);
+             (reverseSync && i==0) ? zones[i].value : -1,
+             dutyCycle);
     url += "&zone=";
     url += zoneStr;
     Serial.print("Device->sheet: ");
@@ -344,10 +381,10 @@ void controlTask(void *params) {
 
     if (millis() > tNextNexaUpdate) {
       Serial.println("Update Nexas...");
-      activity = ACTIVITY_NEXA;
+      activity = NEXA;
       updateNexas();
-      tNextNexaUpdate = millis() + 5*60*1000; // 5 min
-      activity = ACTIVITY_NONE;
+      tNextNexaUpdate = millis() + 5000*60*1000; // 5 min
+      activity = NONE;
       Serial.println("Update Nexas done!");
     }
 
@@ -358,23 +395,23 @@ void controlTask(void *params) {
     bool doScheduledSync = dayMin % syncInterval == 0 && dayMin != dayMinDone;
     if (doScheduledSync || millis() > tNextSync) {
 
-      activity = ACTIVITY_WIFI;
+      activity = WIFI;
       enableWiFi();
-      activity = ACTIVITY_NONE;
+      activity = NONE;
 
       if (WiFi.status() == WL_CONNECTED) {
 
         if (dayMin == 3*60 || millis() > tNextTimeAdjustment) {
           Serial.println("NTP sync...");
-          activity = ACTIVITY_TIME;
+          activity = TIME;
           adjustTime();
           tNextTimeAdjustment = millis() + 24*60*60*1000; // 24 hours
-          activity = ACTIVITY_NONE;
+          activity = NONE;
           Serial.println("NTP sync done!");
         }
 
         Serial.println("Synchronize with remote...");
-        activity = ACTIVITY_SYNC;
+        activity = SYNC;
         synchronizeWithRemote(reverseSyncPending);
         reverseSyncPending = false;
         dayMinDone = dayMin;
@@ -383,7 +420,7 @@ void controlTask(void *params) {
 
         // Avoid too frequent Nexa updates (pilot signal confusion)
         tNextNexaUpdate = millis() + DELAY_NEXA_TRANSMIT;
-        activity = ACTIVITY_NONE;
+        activity = NONE;
       }
 
       disableWiFi();
@@ -533,7 +570,7 @@ void displayTask(void *params) {
 
       int n=0;
       for (int i=0; i<numZones; i++) {
-        if (zones[i].type == Auto || zones[i].type == Manual) {
+        if (zones[i].type == AUTO || zones[i].type == MANUAL) {
           if (zones[i].state != zones[i].lastDisplayedState || tNextDisplay == 0) {
             if (zones[i].state) {
               tft.fillCircle(n*20+8, y+8, 8, TFT_YELLOW);
@@ -555,10 +592,10 @@ void displayTask(void *params) {
       // Activity / uptime
       y = 223;
       String text = toDurationStr(getUptimeMillis());
-      if      (activity == ACTIVITY_NEXA) text = "Nexa";
-      else if (activity == ACTIVITY_WIFI) text = "WiFi";
-      else if (activity == ACTIVITY_TIME) text = "Time";
-      else if (activity == ACTIVITY_SYNC) text = "Sync";
+      if      (activity == NEXA) text = "Nexa";
+      else if (activity == WIFI) text = "WiFi";
+      else if (activity == TIME) text = "Time";
+      else if (activity == SYNC) text = "Sync";
 
       tft.setTextColor(TFT_GREEN, TFT_BLACK);
       tft.setTextDatum(TR_DATUM);
@@ -593,17 +630,13 @@ void displaySelectedNexa() {
   tft.fillRect(0, 0, 135, 26, TFT_BLACK);
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
 
-  int ch;
-  if (nexas[selectedNexa].type == He35)     ch='H';
-  if (nexas[selectedNexa].type == Simple)   ch='S';
-  if (nexas[selectedNexa].type == Learning) ch='L';
-  tft.drawChar(ch, 0, -3, 2);
+  tft.drawChar(nexas[selectedNexa].type, 0, -3, 2);
 
   int x = 10;
   int y = -3;
   for (int i=7; i>=0; i--) {
-    ch = (nexas[selectedNexa].id>>i*4 & 0x0000000F);
-    x += tft.drawChar(ch + (ch>9?'A'-10:'0'), x, y, 2);
+    int value = (nexas[selectedNexa].id>>i*4 & 0x0000000F);
+    x += tft.drawChar(value < 10 ? '0'+value : 'A'+value-10, x, y, 2);
     if (i==4) {
       x = 10;
       y += 13;

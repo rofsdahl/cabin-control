@@ -19,6 +19,21 @@
 #define SENSOR_PIN        25
 #define TX_PIN            26
 
+#define DELAY_STARTUP          4000
+#define DELAY_NEXT_DISPLAY     1000
+#define DELAY_NEXA_TRANSMIT    5000
+#define DELAY_REVERSE_SYNC     5000
+#define TIMEOUT_WIFI_CONNECT  10000
+#define TIMEOUT_WIFI_RETRY     1000
+#define TIMEOUT_HTTP          20000
+
+// TODO: Use enum with defined values
+#define ACTIVITY_NONE 0
+#define ACTIVITY_NEXA 1
+#define ACTIVITY_WIFI 2
+#define ACTIVITY_TIME 3
+#define ACTIVITY_SYNC 4
+
 Preferences preferences;
 TFT_eSPI tft = TFT_eSPI();
 OneWire oneWire(SENSOR_PIN);
@@ -26,19 +41,15 @@ DallasTemperature dallas(&oneWire);
 NexaTx nexaTx = NexaTx(TX_PIN);
 Backlight backlight;
 
-#define ACTIVITY_NONE 0
-#define ACTIVITY_NEXA 1
-#define ACTIVITY_WIFI 2
-#define ACTIVITY_TIME 3
-#define ACTIVITY_SYNC 4
-
 byte activity = ACTIVITY_NONE;
 byte setMode;
 byte setTemp;
+byte prevTemp;
 byte minTemp[] = { 5, 16};
 byte maxTemp[] = {15, 25};
 int syncInterval = 60;
 bool reverseSyncPending = false;
+bool savePrefsPending = false;
 unsigned long tNextNexaUpdate = 0;
 unsigned long tNextSync = 0;
 unsigned long tNextTokenRefresh = 0;
@@ -47,19 +58,20 @@ unsigned long tLastSync = 0;
 unsigned long tNextDisplay = 0;
 String accessToken = "";
 int errCount = 0;
+int numZones = sizeof(zones)/sizeof(zones[0]);
 
 ////////////////////////////////////////////////////////////////////////////////
-void enableWiFi(){
-  WiFi.disconnect(false);  // Reconnect the network
-  WiFi.mode(WIFI_STA);    // Switch WiFi off
+void enableWiFi() {
+  WiFi.disconnect(false);
+  WiFi.mode(WIFI_STA);
   delay(200);
 
   Serial.println("Connecting to WiFi...");
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-  unsigned long tTimeout = millis() + 10000;
+  unsigned long tTimeout = millis() + TIMEOUT_WIFI_CONNECT;
   do {
-    delay(1000);
+    delay(TIMEOUT_WIFI_RETRY);
   } while (WiFi.status() != WL_CONNECTED && millis() < tTimeout);
 
   if (WiFi.status() == WL_CONNECTED) {
@@ -71,9 +83,9 @@ void enableWiFi(){
   }
 }
 
-void disableWiFi(){
-  WiFi.disconnect(true);  // Disconnect from the network
-  WiFi.mode(WIFI_OFF);    // Switch WiFi off
+void disableWiFi() {
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
   Serial.println("WiFi disconnected!");
 }
 
@@ -98,8 +110,8 @@ String toDurationStr(unsigned long ms) {
 }
 
 uint8_t weekday(time_t unixTime) {
-  //Calculate day of week Sun-Sat as an integer 0-6
-  //1970-01-01 was a Thursday (4)
+  // Calculate day of week Sun-Sat as an integer 0-6
+  // 1970-01-01 was a Thursday (4)
   return ((unixTime / (24*60*60)) + 4) % 7;
 }
 
@@ -141,60 +153,118 @@ void adjustTime() {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+int getNumTempZones() {
+  int numTempZones = 0;
+  for (int i=0; i<numZones; i++) {
+    if (zones[i].type == Auto || zones[i].type == Sensor) {
+      numTempZones++;
+    }
+  }
+  return numTempZones;
+}
+
+int getTempZone(int n) {
+  int t=0;
+  for (int i=0; i<numZones; i++) {
+    if (zones[i].type == Auto || zones[i].type == Sensor) {
+      if (n==t) return i;
+      else t++;
+    }
+  }
+  return -1;
+}
+
+void restorePreferences() {
+  // TODO: Check for legal values (temp 5-25, manual 0-1)?
+  for (int i=0; i<numZones; i++) {
+    zones[i].value = preferences.getUChar(zones[i].name, 0);
+    Serial.print("Restore zone ");
+    Serial.print(zones[i].name);
+    Serial.print(": ");
+    Serial.println(zones[i].value);
+  }
+  prevTemp = preferences.getUChar("prevTemp", 0);
+  Serial.print("Restore prevTemp: ");
+  Serial.println(prevTemp);
+
+  setTemp = zones[0].value;
+  setMode = setTemp >= minTemp[1] ? 1 : 0;
+}
+
+void savePreferences() {
+  for (int i=0; i<numZones; i++) {
+    Serial.print("Save zone ");
+    Serial.print(zones[i].name);
+    Serial.print(": ");
+    Serial.println(zones[i].value);
+    preferences.putUChar(zones[i].name, zones[i].value);
+  }
+  Serial.print("Save prevTemp: ");
+  Serial.println(prevTemp);
+  preferences.putUChar("prevTemp", prevTemp);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
 void readTemperatures() {
   dallas.requestTemperatures();
-  int numSensors = sizeof(sensor)/sizeof(sensor[0]);
-  for (int s=0; s<numSensors; s++) {
-    sensor[s].temp = dallas.getTempC(sensor[s].addr);
+  for (int i=0; i<numZones; i++) {
+    if (zones[i].type == Auto || zones[i].type == Sensor) {
+      zones[i].temp = dallas.getTempC(zones[i].sensorAddr);
+    }
   }
 }
 
 void updateNexas() {
-  int numNexas = sizeof(nexa)/sizeof(nexa[0]);
+  // TODO: Count/accumulate on-ratio here
+  for (int i=0; i<numZones; i++) {
+    // Update state for Auto-zones
+    if (zones[i].type == Auto) {
+      float tempOffset = zones[i].state ? 0.1 : -0.1;
+      zones[i].state = zones[i].temp < (zones[i].value + tempOffset);
+    }
+    // Update state for manual zones
+    if (zones[i].type == Manual) {
+      zones[i].state = zones[i].value > 0;
+    }
+  }
+
+  // Transmit current zone state for all Nexa power plugs
+  int numNexas = sizeof(nexas)/sizeof(nexas[0]);
   for (int i=0; i<numNexas; i++) {
-
-    // Nexa linked to sensor?
-    if (nexa[i].linkedSensor != -1) {
-      float tempThreshold = nexa[i].state ? setTemp + 0.1 : setTemp - 0.1;
-      nexa[i].state = sensor[nexa[i].linkedSensor].temp < tempThreshold;
-    }
-
-    // Nexa linked to mode?
-    if (nexa[i].activeInMode != -1) {
-      nexa[i].state = nexa[i].activeInMode == setMode;
-    }
-
-    nexaTx.transmit(nexa[i].type, nexa[i].id, nexa[i].state);
+    Serial.print("Transmit Nexa ");
+    Serial.print(zones[nexas[i].zone].name);
+    Serial.print(": ");
+    Serial.println(zones[nexas[i].zone].state);
+    nexaTx.transmit(nexas[i].type,
+                    nexas[i].id,
+                    zones[nexas[i].zone].state);
   }
 }
 
 void synchronizeWithRemote(bool reverseSync) {
+
+  //TODO: Support using dev script also (is it always valid?)
   String url = "https://script.google.com/macros/s/" APPS_SCRIPT_ID "/exec?uptime=";
   url += getUptimeMillis()/1000;
 
-  url += "&errCount=";
+  url += "&errorCount=";
   url += errCount;
 
-  if (reverseSync) {
-    url += "&setTemp=";
-    url += setTemp;
+  for (int i=0; i<numZones; i++) {
+    char zoneStr[30];
+    // Reverse sync only zone 0
+    snprintf(zoneStr, sizeof(zoneStr), "%s;%c;%.1f;%d",
+             zones[i].name,
+             zones[i].type,
+             zones[i].temp,
+             (reverseSync && i==0) ? zones[i].value : -1);
+    url += "&zone=";
+    url += zoneStr;
+    Serial.print("Device->sheet: ");
+    Serial.println(zoneStr);
   }
 
-  int numSensors = sizeof(sensor)/sizeof(sensor[0]);
-  for (int i=0; i<numSensors; i++) {
-    url += "&temp=";
-    url += sensor[i].name;
-    url += ":";
-    url += String(sensor[i].temp, 1);
-  }
-
-  int numNexas = sizeof(nexa)/sizeof(nexa[0]);
-  for (int i=0; i<numNexas; i++) {
-    if (nexa[i].linkedSensor == -1 && nexa[i].activeInMode == -1) {
-      url += "&output=";
-      url += nexa[i].name;
-    }
-  }
   tLastSync = millis();
 
   int responseCode = 0;
@@ -202,42 +272,52 @@ void synchronizeWithRemote(bool reverseSync) {
 
   do {
     HTTPClient http;
+    Serial.print("HTTP request: ");
+    Serial.println(url.c_str());
     http.begin(url.c_str());
     const char * headerKeys[] = {"Location"};
     http.collectHeaders(headerKeys, sizeof(headerKeys)/sizeof(char*));
-    http.setTimeout(20000);
+    http.setTimeout(TIMEOUT_HTTP);
     responseCode = http.GET();
-    
     Serial.print("HTTP response code: ");
     Serial.println(responseCode);
-    
+
     if (responseCode == 200) {
       String payload = http.getString();
       http.end();
 
       JSONVar json = JSON.parse(payload);
       if (JSON.typeof(json) == "object") {
-        int value = (int)json["setTemp"];
-        if (value >= minTemp[0] && value <= maxTemp[1]) {
-          setTemp = value;
-          setMode = setTemp >= minTemp[1] ? 1 : 0;
-          preferences.putUChar("setMode", setMode);
-          preferences.putUChar(String(setMode).c_str(), setTemp);
+
+        for (int i=0; i<numZones; i++) {
+          // TODO: Check for legal values (temp 5-25, manual 0-1)?
+          // TODO: Fix invalid values, and sync back (set reverseSync=true)
+
+          int value = (int)json[String("zone.")+zones[i].name];
+          if (value != zones[i].value) {
+            Serial.print("Sheet->device: ");
+            Serial.print(zones[i].name);
+            Serial.print(": ");
+            Serial.println(zones[i].value);
+            zones[i].value = value;
+            savePrefsPending = true;
+          }
+
+          if (i==0) {
+            setTemp = zones[0].value;
+            setMode = setTemp >= minTemp[1] ? 1 : 0;
+          }
         }
-        value = (int)json["syncInterval"];
+
+        int value = (int)json["syncInterval"];
+        Serial.print("Sync interval: ");
+        Serial.println(value);
         if (value > 0) {
           syncInterval = value;
         }
-
-        for (int i=0; i<numNexas; i++) {
-          if (nexa[i].linkedSensor == -1 && nexa[i].activeInMode == -1) {
-            value = (int)json[String("output.")+nexa[i].name];
-            nexa[i].state = value > 0;
-          }
-        }
       }
     }
-    
+
     if (responseCode == 302) {
       url = http.header("Location");
     }
@@ -245,18 +325,21 @@ void synchronizeWithRemote(bool reverseSync) {
     if (responseCode < 0) {
       errCount++;
     }
-    
+
     http.end();
 
   } while (responseCode == 302 && maxRedirects-- > 0);
 }
 
 void controlTask(void *params) {
-  Serial.print("controlTask() running on core ");
-  Serial.println(xPortGetCoreID());
   int dayMinDone = -1;
 
   while (true) {
+    if (savePrefsPending) {
+      savePreferences();
+      savePrefsPending = false;
+    }
+
     readTemperatures();
 
     if (millis() > tNextNexaUpdate) {
@@ -298,7 +381,8 @@ void controlTask(void *params) {
         tNextSync = millis() + syncInterval*60*1000;
         Serial.println("Synchronize with remote done!");
 
-        tNextNexaUpdate = millis() + 5000; //Avoid too frequent Nexa updates (pilot signal confusion)
+        // Avoid too frequent Nexa updates (pilot signal confusion)
+        tNextNexaUpdate = millis() + DELAY_NEXA_TRANSMIT;
         activity = ACTIVITY_NONE;
       }
 
@@ -313,8 +397,9 @@ void controlTask(void *params) {
 
 void triggerReverseSync() {
   reverseSyncPending = true;
-  tNextNexaUpdate = millis() + 5000; //Avoid too rapid Nexa updates (pilot signal confusion)
-  tNextSync = millis() + 5000;
+  // Avoid too rapid Nexa updates (pilot signal confusion)
+  tNextNexaUpdate = millis() + DELAY_REVERSE_SYNC;
+  tNextSync = millis() + DELAY_REVERSE_SYNC;
 }
 
 void toggleMode(Button2& btn) {
@@ -322,10 +407,13 @@ void toggleMode(Button2& btn) {
     backlight.setBright();
   } else {
     setMode = (setMode + 1) % 2;
-    preferences.putUChar("setMode", setMode);
-    setTemp = preferences.getUChar(String(setMode).c_str(), minTemp[setMode]);
+    setTemp = prevTemp;
+    prevTemp = zones[0].value;
+    zones[0].value = setTemp;
+    
     tNextDisplay = 0;
     triggerReverseSync();
+    savePrefsPending = true;
   }
 }
 
@@ -337,16 +425,15 @@ void increaseTemp(Button2& btn) {
     if (setTemp > maxTemp[setMode]) {
       setTemp = minTemp[setMode];
     }
-    preferences.putUChar(String(setMode).c_str(), setTemp);
+    zones[0].value = setTemp;
+    
     tNextDisplay = 0;
     triggerReverseSync();
+    savePrefsPending = true;
   }
 }
 
 void buttonTask(void *params) {
-  Serial.print("buttonTask() running on core ");
-  Serial.println(xPortGetCoreID());
-
   Button2 leftBtn = Button2(LEFT_BUTTON_PIN);
   leftBtn.setPressedHandler(toggleMode);
 
@@ -364,9 +451,6 @@ void buttonTask(void *params) {
 ////////////////////////////////////////////////////////////////////////////////
 
 void displayTask(void *params) {
-  Serial.print("displayTask() running on core ");
-  Serial.println(xPortGetCoreID());
-
   tft.fillScreen(TFT_BLACK);
   backlight.begin(TFT_BL, 8, 20, 255, 60*1000); // 60 sec
 
@@ -392,30 +476,29 @@ void displayTask(void *params) {
 
       // Main temp
       y = 82;
-      int numSensors = sizeof(sensor)/sizeof(sensor[0]);
-      if (numSensors >= 1) {
-        tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-        int x = tft.drawFloat(sensor[0].temp, 1, 67, y, 6);
-        tft.fillRect(0,      y, 67-x/2, 48, TFT_BLACK);
-        tft.fillRect(67+x/2, y, 68-x/2, 48, TFT_BLACK);
-      }
+      tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+      int x = tft.drawFloat(zones[0].temp, 1, 67, y, 6);
+      tft.fillRect(0,      y, 67-x/2, 48, TFT_BLACK);
+      tft.fillRect(67+x/2, y, 68-x/2, 48, TFT_BLACK);
 
       // Extra temp
       y = 130;
-      if (numSensors >= 2) {
-        int i = 1 + ((millis()/10000) % (numSensors-1));
+      int numTempZones = getNumTempZones();
+      if (numTempZones >= 2) {
+        int i = 1 + ((millis()/10000) % (numTempZones-1));
+        i = getTempZone(i);
         tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
         tft.setTextDatum(TL_DATUM);
-        int x1 = tft.drawString(sensor[i].name, 0, y, 4);
+        int x1 = tft.drawString(zones[i].name, 0, y, 4);
         x1 += tft.drawString(":", x1, y, 4);
         tft.setTextDatum(TR_DATUM);
-        int x2 = 135 - tft.drawFloat(sensor[i].temp, 1, 135, y, 4);
+        int x2 = 135 - tft.drawFloat(zones[i].temp, 1, 135, y, 4);
         tft.fillRect(x1, y, x2-x1, 26, TFT_BLACK);
       }
 
       // Set temp
       y = 170;
-      static byte lastDisplayedTemp = 0;
+      static byte lastDisplayedTemp = -1;
       if (setTemp != lastDisplayedTemp) {
         uint16_t col = setMode == 1 ? TFT_RED : TFT_BLUE;
         tft.setTextColor(TFT_YELLOW, col);
@@ -444,25 +527,28 @@ void displayTask(void *params) {
         }
       }
 
-      // Nexa state
+      // Zone state
       y = 223;
       tft.setTextDatum(TL_DATUM);
 
-      int numNexas = sizeof(nexa)/sizeof(nexa[0]);
-      for (int i=0; i<numNexas; i++) {
-        if (nexa[i].state != nexa[i].lastDisplayedState || tNextDisplay == 0) {
-          if (nexa[i].state) {
-            tft.fillCircle(i*20+8, y+8, 8, TFT_YELLOW);
-            tft.setTextColor(TFT_BLACK);
-            tft.drawChar(nexa[i].name[0], i*20+5, y, 2);
+      int n=0;
+      for (int i=0; i<numZones; i++) {
+        if (zones[i].type == Auto || zones[i].type == Manual) {
+          if (zones[i].state != zones[i].lastDisplayedState || tNextDisplay == 0) {
+            if (zones[i].state) {
+              tft.fillCircle(n*20+8, y+8, 8, TFT_YELLOW);
+              tft.setTextColor(TFT_BLACK);
+              tft.drawChar(zones[i].name[0], n*20+5, y, 2);
+            }
+            else {
+              tft.fillCircle(n*20+8, y+8, 8, TFT_BLACK);
+              tft.drawCircle(n*20+8, y+8, 8, TFT_YELLOW);
+              tft.setTextColor(TFT_YELLOW);
+              tft.drawChar(zones[i].name[0], n*20+5, y, 2);
+            }
+            zones[i].lastDisplayedState = zones[i].state;
           }
-          else {
-            tft.fillCircle(i*20+8, y+8, 8, TFT_BLACK);
-            tft.drawCircle(i*20+8, y+8, 8, TFT_YELLOW);
-            tft.setTextColor(TFT_YELLOW);
-            tft.drawChar(nexa[i].name[0], i*20+5, y, 2);
-          }
-          nexa[i].lastDisplayedState = nexa[i].state;
+          n++; //Next position
         }
       }
 
@@ -476,10 +562,10 @@ void displayTask(void *params) {
 
       tft.setTextColor(TFT_GREEN, TFT_BLACK);
       tft.setTextDatum(TR_DATUM);
-      int x = tft.drawString(text, 135, y, 2);
+      x = tft.drawString(text, 135, y, 2);
       tft.fillRect(100, y, 35-x, 16, TFT_BLACK);
 
-      tNextDisplay = millis() + 1000;
+      tNextDisplay = millis() + DELAY_NEXT_DISPLAY;
     }
 
     vTaskDelay(1);
@@ -508,15 +594,15 @@ void displaySelectedNexa() {
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
 
   int ch;
-  if (nexa[selectedNexa].type == He35)     ch='H';
-  if (nexa[selectedNexa].type == Simple)   ch='S';
-  if (nexa[selectedNexa].type == Learning) ch='L';
+  if (nexas[selectedNexa].type == He35)     ch='H';
+  if (nexas[selectedNexa].type == Simple)   ch='S';
+  if (nexas[selectedNexa].type == Learning) ch='L';
   tft.drawChar(ch, 0, -3, 2);
 
   int x = 10;
   int y = -3;
   for (int i=7; i>=0; i--) {
-    ch = (nexa[selectedNexa].id>>i*4 & 0x0000000F);
+    ch = (nexas[selectedNexa].id>>i*4 & 0x0000000F);
     x += tft.drawChar(ch + (ch>9?'A'-10:'0'), x, y, 2);
     if (i==4) {
       x = 10;
@@ -524,7 +610,7 @@ void displaySelectedNexa() {
     }
   }
 
-  tft.drawString(nexa[selectedNexa].name, 45, 0, 4);
+  tft.drawString(zones[nexas[selectedNexa].zone].name, 45, 0, 4);
   tft.drawLine(0, 26, 135, 26, TFT_YELLOW);
 }
 
@@ -581,7 +667,7 @@ void menuSystem() {
 
       switch(selectedMenuItem) {
         case 0: {
-          selectedNexa = (selectedNexa+1)%(sizeof(nexa)/sizeof(nexa[0]));
+          selectedNexa = (selectedNexa+1)%(sizeof(nexas)/sizeof(nexas[0]));
           displaySelectedNexa();
           while (digitalRead(RIGHT_BUTTON_PIN) == LOW);
           break;
@@ -601,7 +687,7 @@ void menuSystem() {
               tft.fillCircle(126, 10, 8, TFT_BLACK);
               tft.drawCircle(126, 10, 8, TFT_YELLOW);
             }
-            nexaTx.transmit(nexa[selectedNexa].type, nexa[selectedNexa].id, activation, 2);
+            nexaTx.transmit(nexas[selectedNexa].type, nexas[selectedNexa].id, activation, 2);
           }
           displaySelectedNexa();
           break;
@@ -654,7 +740,7 @@ void setup() {
   tft.drawString(__TIME__,             0, 2*13, 2);
   tft.drawString("Press for menu...",  0, 4*13, 2);
 
-  unsigned long timeout = millis() + 4000;
+  unsigned long timeout = millis() + DELAY_STARTUP;
   while (millis() < timeout) {
     tft.drawNumber((timeout-millis())/1000, 0, 5*13, 2);
     if (digitalRead(LEFT_BUTTON_PIN) == LOW || digitalRead(RIGHT_BUTTON_PIN) == LOW) {
@@ -662,9 +748,8 @@ void setup() {
     }
   }
 
-  preferences.begin("temp", false);
-  setMode = preferences.getUChar("setMode", 0);
-  setTemp = preferences.getUChar(String(setMode).c_str(), minTemp[setMode]);
+  preferences.begin("temp");
+  restorePreferences();
 
   xTaskCreatePinnedToCore(displayTask, "displayTask", 10000, NULL, 2, NULL, 1);
   xTaskCreatePinnedToCore(buttonTask,  "buttonTask",  10000, NULL, 2, NULL, 1);

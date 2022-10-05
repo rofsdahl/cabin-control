@@ -1,7 +1,7 @@
 function doGet(e) {
 
   var timestamp = new Date();
-  updateCell("Last sync", timestamp)
+  updateCell("Last Sync", timestamp)
     .setNumberFormat("dd.mm.yyyy hh:mm");
 
   var secs = getParam(e, "uptime");
@@ -15,45 +15,66 @@ function doGet(e) {
     "%d days, %02d:%02d:%02d", days, hours, mins, secs))
     .setHorizontalAlignment("right");
 
-  updateCell("Errors", getParam(e, "errCount"));
-
-  // Scheduled temp change?
-  var scheduleTime = new Date(readCell("Schedule time", ""));
-  var scheduleTemp = readCell("Schedule temp", "");
-  if (timestamp > scheduleTime && scheduleTemp > 0) {
-    //console.log("Schedule temp change " + scheduleTemp + " at " + scheduleTime);
-    updateCell("Set temp", scheduleTemp);
-    updateCell("Schedule time", "");
-    updateCell("Schedule temp", "");
-  }
-
-  // Sync setTemp both ways
-  var setTemp = getParam(e, "setTemp");
-  if (setTemp != null) {
-    // New setTemp from device (reverse sync)
-    updateCell("Set temp", setTemp);
-  }
-  else {
-    setTemp = readCell("Set temp", 10);
-  }
+  updateCell("Error count", getParam(e, "errorCount"));
 
   var response = {}
-  response["setTemp"] = setTemp;
+  response["syncInterval"] = readCell("Sync Interval", 60);
 
-  // Log temperatures
-  var headerValues = ["Time", "Set temp"];
-  var row = [timestamp, setTemp];
-  getParams(e, "temp").forEach(it => {
-    let v = it.split(":");
-    if (v.length > 1) {
-      let name = v[0];
-      let value = parseFloat(v[1]);
-      updateCell("Temp "+name, value);
-      headerValues.push(name);
-      row.push(value);
+  // Handle scheduled temp change
+  var scheduleTime = new Date(readCell("Schedule Time", ""));
+  var scheduleZone = readCell("Schedule Zone", "");
+  var scheduleTemp = readCell("Schedule Temp", "");
+  if (timestamp > scheduleTime && scheduleZone != "" && scheduleTemp > 0) {
+    //console.log("Schedule " + scheduleTemp + " in " + scheduleZone + " at " + scheduleTime);
+    updateCell("Zone "+scheduleZone, scheduleTemp);
+    updateCell("Schedule Time", "");
+    updateCell("Schedule Zone", "");
+    updateCell("Schedule Temp", "");
+  }
+
+  // Prepare to log temperatures
+  var headerValues = ["Time"];
+  var row = [timestamp];
+
+  // Sync zone settings and temperatures
+  getParams(e, "zone").forEach(it => {
+    // name;type(A/N/S);temp;value
+    // A (Auto):   Both sensor and Nexa -> report temp, device value if reverse sync
+    // S (Sensor): Only sensor, no Nexa -> report temp, no device value
+    // M (Manual): No senor, only Nexa  -> no temp, no device value
+    let zone = it.split(";");
+    if (zone.length >= 4) {
+      let zoneName  = zone[0];
+      let zoneType  = zone[1];
+      let zoneTemp  = parseFloat(zone[2]);
+      let zoneValue = zone[3];
+
+      if (zoneType=="A" && zoneValue != -1) {
+        // Reverse sync for Auto-zones, device -> sheet
+        // Manual zones may use a formula, so don't overwrite it
+        updateCell("Zone "+zoneName, zoneValue);
+      }
+      if (zoneType=="A" || zoneType=="M") {
+        // Sync zone value, sheet -> device
+        // Manual zones may use a formula
+        zoneValue = readCell("Zone "+zoneName, 0);
+        response["zone."+zoneName] = zoneValue;
+      }
+      if (zoneType=="A") {
+        // Log set value only for Auto zone
+        headerValues.push("Set "+zoneName);
+        row.push(zoneValue);
+      }
+      if (zoneType=="A" || zoneType=="S") {
+        // Log temp
+        updateCell("Temp "+zoneName, zoneTemp);
+        headerValues.push(zoneName);
+        row.push(zoneTemp);
+      }
     }
   });
 
+  // Log temperatures
   var logName = Utilities.formatString("%04d-%02d", timestamp.getFullYear(), timestamp.getMonth()+1)
   var logSheet = getSheet(logName, 1);
   logSheet.getRange(1, 1, 1, headerValues.length)
@@ -61,12 +82,6 @@ function doGet(e) {
           .setFontWeight("bold");
   logSheet.appendRow(row)
           .autoResizeColumns(1, headerValues.length);
-
-  // Update status for extra outputs
-  // This is done AFTER updating temperatures, since the values may be defined by formulas
-  getParams(e, "output").forEach(it => response["output."+it] = readCell("Output "+it, 0));
-
-  response["syncInterval"] = readCell("Sync interval", 60);
 
   return ContentService
     .createTextOutput(JSON.stringify(response))

@@ -29,6 +29,7 @@ The current device activity is displayed at bottom right:
 The two buttons are used for adjusting the desired temperature locally (when you are on-site):
 * M: Toggle between temperature modes: frost protection / comfort mode
 * +: Increment desired temperature for the currently selected mode. The temperature will roll over from max to min (e.g. 16, 17, ... 24, 25, 16, 17, ...)
+* Note! The buttons control the first configured zone (index 0), so this need to be the primary auto-zone.
 
 ## Synchronization
 Temperatures will be appended to sheet '&lt;yyyy-mm&gt;' in the configured Google spreadsheet (the sheet will be created if it doesn't exist):
@@ -36,15 +37,15 @@ Temperatures will be appended to sheet '&lt;yyyy-mm&gt;' in the configured Googl
 ![Spreadsheet temperature sheet](images/temperatures.jpg)
 
 Configuration will be read from the sheet 'config', columns A and B (a sheet with default values will be created if it doesn't exist):
-* **Last sync:** Timestamp of last sync
+* **Last Sync:** Timestamp of last sync
 * **Uptime:** Reported uptime from device
-* **Errors:** Errors counted by device (e.g. HTTP timeout)
-* **Sync interval:** Interval between each synchronization (in minutes)
-* **Schedule time:** Scheduled time for applying scheduled temperature as new set temperature
-* **Schedule temp:** Set temperature to apply at scheduled time
-* **Set temp:** Set (desired) temperature (will be read by device, and updated if changed locally at device)
+* **Error Count:** Errors counted by device (e.g. HTTP timeout)
+* **Sync Interval:** Interval between each synchronization (in minutes)
+* **Schedule Time:** Scheduled time for applying scheduled temperature as new set temperature
+* **Schedule Zone:** Zone to apply scheduled temperature for
+* **Schedule Temp:** Set temperature to apply at scheduled time
+* **Zone &lt;Name&gt;:** Set (desired) temperature for auto-zone or state (0/1) for manual zone (will be read by device, and updated if changed locally at device)
 * **Temp &lt;xyz&gt;:** Current temperature of temperature sensor &lt;xyz&gt;
-* **Output &lt;xyz&gt;:** Set status of extra output &lt;xyz&gt;: 0=off, 1=on (read by device)
 * ...
 
 ![Spreadsheet config sheet](images/config.png)
@@ -139,24 +140,20 @@ Go to **Tools > Manage libraries** and install the following libraries:
 Use the file `config.h.sample` to create a configuration file `config.h` and insert:
 * WiFi connection properties
 * Google Apps Script ID (see below)
-* Temperature sensors:
-  * name (Name of sensor, e.g "Livingroom" or "Outside")
-  * address (8 bytes) (can be read using the utility menu system)
-    * Tip! Addresses of connected sensors will be printed to serial output - use Serial Monitor at 115000 baud
-  * temp (only used internally, set it to 0)
-* Nexa switches:
-  * name (Name of unit/room/area, e.g. "Livingroom")
+* Zones:
+  * name (Name, e.g "Livingroom" or "Outside", use only US-ASCII characters)
+  * type (Auto/Sensor/Manual)
+    * 'Auto': Temperature controlled zone with both temperature sensor and Nexa power plug(s)
+    * 'Sensor': Zone with temperature sensor, but no Nexa power plugs
+    * 'Manual': Zone with Nexa power plug(s), but no temperature sensor
+  * sensor address (8 bytes)
+    * Tip! Addresses of connected sensors can be acquired using the utility menu system, and will be printed to serial output - use Serial Monitor at 115000 baud.
+* Nexa power plugs:
+  * zone index (index of the zone that the Nexa power plug belongs, counting from 0)
   * type (Learning/Simple/He35)
   * id
     * 4 bytes id for 'Learning'
     * 1 byte House and Unit for 'Simple' and 'He35' (0x000000HU)
-  * linkedSensor (index of sensor controlling this switch, or -1 if not linked to sensor)
-  * activeInMode
-    * 1 if active in comfort mode
-    * 0 if active in frost protection mode
-    * -1 if not linked to mode
-  * state (only used internally, set it to false)
-  * lastDisplayedState (only used internally, set it to false)
 
 ## Configuration of Google spreadsheet
 Create a Google spreadsheet with associated Apps Script:

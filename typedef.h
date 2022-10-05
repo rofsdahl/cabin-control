@@ -3,21 +3,26 @@
 
 #include "nexa-tx.h"
 
-typedef struct {
-  const char* name;
-  uint8_t addr[8];
-  float temp;
-} Sensor;
+enum ZoneType {
+  Auto   = 'A',
+  Sensor = 'S',
+  Manual = 'M',
+};
 
 typedef struct {
   const char* name;
-  NexaType type;
-  unsigned long id;
-  int linkedSensor;
-  int activeInMode;
+  ZoneType type;
+  uint8_t sensorAddr[8];
+  float temp;
+  byte value;
   bool state;
   bool lastDisplayedState;
-} Nexa;
+} Zone;
 
+typedef struct {
+  int zone;
+  NexaType type;
+  unsigned long id;
+} Nexa;
 
 #endif

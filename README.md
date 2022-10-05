@@ -45,10 +45,11 @@ Configuration will be read from the sheet 'config', columns A and B (a sheet wit
 * **Schedule Zone:** Zone to apply scheduled temperature for
 * **Schedule Temp:** Set temperature to apply at scheduled time
 * **Zone &lt;Name&gt;:** Set (desired) temperature for auto-zone or state (0/1) for manual zone (will be read by device, and updated if changed locally at device)
-* **Temp &lt;xyz&gt;:** Current temperature of temperature sensor &lt;xyz&gt;
+* **Temp &lt;Name&gt;:** Current temperature of zone &lt;Name&gt;
 * ...
 
 ![Spreadsheet config sheet](images/config.png)
+TODO! Update screenshot
 
 ## Utility menu system
 There is also a utility menu system that is invoked by pressing one of the buttons within a couple of seconds after powering up the device.

@@ -1,3 +1,13 @@
+//#define DEBUG
+
+#ifdef DEBUG
+  #define DEBUG_BEGIN(...)  Serial.begin(__VA_ARGS__)
+  #define DEBUG_PRINTF(...) Serial.printf(__VA_ARGS__)
+#else
+  #define DEBUG_BEGIN(...)  // Blank line - no code
+  #define DEBUG_PRINTF(...) // Blank line - no code
+#endif
+
 #include <Preferences.h>
 #include <WiFi.h>
 #include <TFT_eSPI.h>
@@ -24,7 +34,6 @@
 #define DELAY_NEXA_TRANSMIT    5000
 #define DELAY_REVERSE_SYNC     5000
 #define TIMEOUT_WIFI_CONNECT  10000
-#define TIMEOUT_WIFI_RETRY     1000
 #define TIMEOUT_HTTP          20000
 
 Preferences preferences;
@@ -59,27 +68,24 @@ void enableWiFi() {
   WiFi.mode(WIFI_STA);
   delay(200);
 
-  Serial.println("Connecting to WiFi...");
+  DEBUG_PRINTF("Connecting to WiFi...\n");
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   unsigned long tTimeout = millis() + TIMEOUT_WIFI_CONNECT;
-  do {
-    delay(TIMEOUT_WIFI_RETRY);
-  } while (WiFi.status() != WL_CONNECTED && millis() < tTimeout);
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.print("Connected - IP address: ");
-    Serial.println(WiFi.localIP());
+  while (millis() < tTimeout) {
+    if (WiFi.status() == WL_CONNECTED) {
+      DEBUG_PRINTF("Connected - IP address: %s\n", WiFi.localIP().toString());
+      return;
+    }
+    delay(100);
   }
-  else {
-    Serial.println("Connecting to WiFi failed!");
-  }
+  DEBUG_PRINTF("Connecting to WiFi failed!\n");
 }
 
 void disableWiFi() {
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
-  Serial.println("WiFi disconnected!");
+  DEBUG_PRINTF("WiFi disconnected!\n");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -135,8 +141,7 @@ void adjustTime() {
   int lastDstOffset;
   do {
     const int timezone = 1;
-    Serial.print("Configure time with DST ");
-    Serial.println(dstOffset);
+    DEBUG_PRINTF("Configure time with DST %d\n", dstOffset);
     configTime(timezone*60*60, dstOffset*60*60, "pool.ntp.org", "time.nist.gov");
     lastDstOffset = dstOffset;
     dstOffset = calculateDstOffset();
@@ -171,14 +176,10 @@ void restorePreferences() {
   // TODO: Check for legal values (temp 5-25, manual 0-1)?
   for (int i=0; i<numZones; i++) {
     zones[i].value = preferences.getUChar(zones[i].name, 0);
-    Serial.print("Restore zone ");
-    Serial.print(zones[i].name);
-    Serial.print(": ");
-    Serial.println(zones[i].value);
+    DEBUG_PRINTF("Restore zone %s: %d\n", zones[i].name, zones[i].value);
   }
   prevTemp = preferences.getUChar("prevTemp", 0);
-  Serial.print("Restore prevTemp: ");
-  Serial.println(prevTemp);
+  DEBUG_PRINTF("Restore prevTemp: %d\n", prevTemp);
 
   setTemp = zones[0].value;
   setMode = setTemp >= minTemp[1] ? 1 : 0;
@@ -186,14 +187,10 @@ void restorePreferences() {
 
 void savePreferences() {
   for (int i=0; i<numZones; i++) {
-    Serial.print("Save zone ");
-    Serial.print(zones[i].name);
-    Serial.print(": ");
-    Serial.println(zones[i].value);
+    DEBUG_PRINTF("Save zone %s: %d\n", zones[i].name, zones[i].value);
     preferences.putUChar(zones[i].name, zones[i].value);
   }
-  Serial.print("Save prevTemp: ");
-  Serial.println(prevTemp);
+  DEBUG_PRINTF("Save prevTemp: %d\n", prevTemp);
   preferences.putUChar("prevTemp", prevTemp);
 }
 
@@ -222,22 +219,12 @@ void updateNexas() {
     // Start / stop on-timer
     if (!zones[i].state && newState) {
       zones[i].tOn = millis();
-      Serial.print("Zone ");
-      Serial.print(zones[i].name);
-      Serial.print(" ON at ");
-      Serial.println(zones[i].tOn);
+      DEBUG_PRINTF("Zone %s ON at %d\n", zones[i].name, zones[i].tOn);
     }
     if (zones[i].state && !newState) {
       unsigned long tPeriod = millis() - zones[i].tOn;
       zones[i].tAccu += tPeriod;
-      Serial.print("Zone ");
-      Serial.print(zones[i].name);
-      Serial.print(" OFF at ");
-      Serial.print(millis());
-      Serial.print(" -> period = ");
-      Serial.print(tPeriod);
-      Serial.print(", accumulated = ");
-      Serial.println(zones[i].tAccu);
+      DEBUG_PRINTF("Zone %s OFF at %d -> period = %d, accumulated = %d\n", zones[i].name, millis(), tPeriod, zones[i].tAccu);
     }
 
     // Update state
@@ -247,10 +234,7 @@ void updateNexas() {
   // Transmit current zone state for all Nexa power plugs
   int numNexas = sizeof(nexas)/sizeof(nexas[0]);
   for (int i=0; i<numNexas; i++) {
-    Serial.print("Transmit Nexa ");
-    Serial.print(zones[nexas[i].zone].name);
-    Serial.print(": ");
-    Serial.println(zones[nexas[i].zone].state);
+    DEBUG_PRINTF("Transmit Nexa %s: %d\n", zones[nexas[i].zone].name, zones[nexas[i].zone].state);
     nexaTx.transmit(nexas[i].type,
                     nexas[i].id,
                     zones[nexas[i].zone].state);
@@ -274,16 +258,7 @@ void synchronizeWithRemote(bool reverseSync) {
       zones[i].tOn = millis();
     }
     float dutyCycle = (float)zones[i].tAccu / (millis() - tLastSync);
-    Serial.print("Zone ");
-    Serial.print(zones[i].name);
-    Serial.print(" duty cycle: ");
-    Serial.print(zones[i].tAccu);
-    Serial.print(" / (");
-    Serial.print(millis());
-    Serial.print(" - ");
-    Serial.print(tLastSync);
-    Serial.print(") = ");
-    Serial.println(dutyCycle);
+    DEBUG_PRINTF("Zone %s duty cycle: %d / (%d - %d) = %f\n", zones[i].name, zones[i].tAccu, millis(), tLastSync, dutyCycle);
 
     // Reset on-timer should ideally be done AFTER successful sync
     zones[i].tAccu = 0;
@@ -298,8 +273,7 @@ void synchronizeWithRemote(bool reverseSync) {
              dutyCycle);
     url += "&zone=";
     url += zoneStr;
-    Serial.print("Device->sheet: ");
-    Serial.println(zoneStr);
+    DEBUG_PRINTF("Device->sheet: %s\n", zoneStr);
   }
 
   tLastSync = millis();
@@ -309,15 +283,13 @@ void synchronizeWithRemote(bool reverseSync) {
 
   do {
     HTTPClient http;
-    Serial.print("HTTP request: ");
-    Serial.println(url.c_str());
+    DEBUG_PRINTF("HTTP request: %s\n", url.c_str());
     http.begin(url.c_str());
     const char * headerKeys[] = {"Location"};
     http.collectHeaders(headerKeys, sizeof(headerKeys)/sizeof(char*));
     http.setTimeout(TIMEOUT_HTTP);
     responseCode = http.GET();
-    Serial.print("HTTP response code: ");
-    Serial.println(responseCode);
+    DEBUG_PRINTF("HTTP response code: %d\n", responseCode);
 
     if (responseCode == 200) {
       String payload = http.getString();
@@ -332,10 +304,7 @@ void synchronizeWithRemote(bool reverseSync) {
 
           int value = (int)json[String("zone.")+zones[i].name];
           if (value != zones[i].value) {
-            Serial.print("Sheet->device: ");
-            Serial.print(zones[i].name);
-            Serial.print(": ");
-            Serial.println(zones[i].value);
+            DEBUG_PRINTF("Sheet->device: %s: %d\n", zones[i].name, zones[i].value);
             zones[i].value = value;
             savePrefsPending = true;
           }
@@ -347,8 +316,7 @@ void synchronizeWithRemote(bool reverseSync) {
         }
 
         int value = (int)json["syncInterval"];
-        Serial.print("Sync interval: ");
-        Serial.println(value);
+        DEBUG_PRINTF("Sync interval: %d\n", value);
         if (value > 0) {
           syncInterval = value;
         }
@@ -380,12 +348,12 @@ void controlTask(void *params) {
     readTemperatures();
 
     if (millis() > tNextNexaUpdate) {
-      Serial.println("Update Nexas...");
+      DEBUG_PRINTF("Update Nexas...\n");
       activity = NEXA;
       updateNexas();
       tNextNexaUpdate = millis() + 5000*60*1000; // 5 min
       activity = NONE;
-      Serial.println("Update Nexas done!");
+      DEBUG_PRINTF("Update Nexas done!\n");
     }
 
     struct tm timeinfo;
@@ -402,21 +370,21 @@ void controlTask(void *params) {
       if (WiFi.status() == WL_CONNECTED) {
 
         if (dayMin == 3*60 || millis() > tNextTimeAdjustment) {
-          Serial.println("NTP sync...");
+          DEBUG_PRINTF("NTP sync...\n");
           activity = TIME;
           adjustTime();
           tNextTimeAdjustment = millis() + 24*60*60*1000; // 24 hours
           activity = NONE;
-          Serial.println("NTP sync done!");
+          DEBUG_PRINTF("NTP sync done!\n");
         }
 
-        Serial.println("Synchronize with remote...");
+        DEBUG_PRINTF("Synchronize with remote...\n");
         activity = SYNC;
         synchronizeWithRemote(reverseSyncPending);
         reverseSyncPending = false;
         dayMinDone = dayMin;
         tNextSync = millis() + syncInterval*60*1000;
-        Serial.println("Synchronize with remote done!");
+        DEBUG_PRINTF("Synchronize with remote done!\n");
 
         // Avoid too frequent Nexa updates (pilot signal confusion)
         tNextNexaUpdate = millis() + DELAY_NEXA_TRANSMIT;
@@ -661,20 +629,16 @@ void displaySensors() {
     DeviceAddress address;
     dallas.getAddress(address, i);
 
-    Serial.print("Sensor ");
-    Serial.print(i+1);
-    Serial.print(": ");
+    char buf[17];
+    snprintf(buf, sizeof(buf), "%02X%02X%02X%02X%02X%02X%02X%02X",
+      address[0], address[1], address[2], address[3],
+      address[4], address[5], address[6], address[7]);
+    tft.drawString(buf, 0, 32+i*16, 2);
 
-    int x = 0;
-    for (int j=0; j<8; j++) {
-      char buf[5];
-      snprintf(buf, sizeof(buf), "%02X", address[j]);
-      x += tft.drawString(buf, x, 32+i*16, 2);
-      Serial.print("0x");
-      Serial.print(buf);
-      if (j<7) Serial.print(", ");
-    }
-    Serial.println();
+    DEBUG_PRINTF("Sensor %d: 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X\n",
+      i+1,
+      address[0], address[1], address[2], address[3],
+      address[4], address[5], address[6], address[7]);
   }
 }
 
@@ -748,9 +712,7 @@ void menuSystem() {
 ////////////////////////////////////////////////////////////////////////////////
 
 void setup() {
-  Serial.begin(115200);
-  Serial.print("setup() running on core ");
-  Serial.println(xPortGetCoreID());
+  DEBUG_BEGIN(115200);
 
   dallas.begin();
   tft.init();
@@ -758,9 +720,9 @@ void setup() {
   tft.setTextSize(1);
 
   btStop();
-  Serial.println("Bluetooth stopped!");
+  DEBUG_PRINTF("Bluetooth stopped!\n");
   disableWiFi();
-  Serial.println("Wifi disabled!");
+  DEBUG_PRINTF("Wifi disabled!\n");
 
   pinMode(LEFT_BUTTON_PIN, INPUT);
   pinMode(RIGHT_BUTTON_PIN, INPUT);
@@ -787,6 +749,8 @@ void setup() {
   xTaskCreatePinnedToCore(displayTask, "displayTask", 10000, NULL, 2, NULL, 1);
   xTaskCreatePinnedToCore(buttonTask,  "buttonTask",  10000, NULL, 2, NULL, 1);
   xTaskCreatePinnedToCore(controlTask, "controlTask", 10000, NULL, 2, NULL, 1);
+
+  DEBUG_PRINTF("Setup finished\n");
 }
 
 void loop() {

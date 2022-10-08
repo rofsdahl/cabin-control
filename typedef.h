@@ -3,10 +3,18 @@
 
 #include "nexa-tx.h"
 
+enum Activity {
+  NONE,
+  NEXA,
+  WIFI,
+  TIME,
+  SYNC,
+};
+
 enum ZoneType {
-  Auto   = 'A',
-  Sensor = 'S',
-  Manual = 'M',
+  AUTO   = 'A',
+  SENSOR = 'S',
+  MANUAL = 'M',
 };
 
 typedef struct {
@@ -17,6 +25,8 @@ typedef struct {
   byte value;
   bool state;
   bool lastDisplayedState;
+  unsigned long tOn;
+  unsigned long tAccu;
 } Zone;
 
 typedef struct {

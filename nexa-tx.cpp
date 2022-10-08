@@ -14,7 +14,7 @@ void NexaTx::transmit(NexaType type, unsigned long id, boolean activation, int r
   String bitSequence = "";
 
   String packet;
-  if (type == Learning) {
+  if (type == LEARN) {
     pulseLen = 250;
     byte unit = 1;
     packet = toSelfLearningPacket(id, unit, activation);
@@ -26,7 +26,7 @@ void NexaTx::transmit(NexaType type, unsigned long id, boolean activation, int r
     byte house = (id & 0xF0) >> 4;
     byte unit = id & 0x0F;
 
-    if (type == Simple) {
+    if (type == SIMPLE) {
       pulseLen = 350;
       packet = toSimplePacket(house, unit, activation);
     }

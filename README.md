@@ -143,18 +143,18 @@ Use the file `config.h.sample` to create a configuration file `config.h` and ins
 * Google Apps Script ID (see below)
 * Zones:
   * name (Name, e.g "Livingroom" or "Outside", use only US-ASCII characters)
-  * type (Auto/Sensor/Manual)
-    * 'Auto': Temperature controlled zone with both temperature sensor and Nexa power plug(s)
-    * 'Sensor': Zone with temperature sensor, but no Nexa power plugs
-    * 'Manual': Zone with Nexa power plug(s), but no temperature sensor
+  * type (AUTO/SENSOR/MANUAL)
+    * 'AUTO': Temperature controlled zone with both temperature sensor and Nexa power plug(s)
+    * 'SENSOR': Zone with temperature sensor, but no Nexa power plugs
+    * 'MANUAL': Zone with Nexa power plug(s), but no temperature sensor
   * sensor address (8 bytes)
     * Tip! Addresses of connected sensors can be acquired using the utility menu system, and will be printed to serial output - use Serial Monitor at 115000 baud.
 * Nexa power plugs:
   * zone index (index of the zone that the Nexa power plug belongs, counting from 0)
-  * type (Learning/Simple/He35)
+  * type (LEARN/SIMPLE/HE35)
   * id
-    * 4 bytes id for 'Learning'
-    * 1 byte House and Unit for 'Simple' and 'He35' (0x000000HU)
+    * 4 bytes id for 'LEARN'
+    * 1 byte House and Unit for 'SIMPLE' and 'HE35' (0x000000HU)
 
 ## Configuration of Google spreadsheet
 Create a Google spreadsheet with associated Apps Script:

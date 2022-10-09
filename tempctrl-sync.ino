@@ -1,11 +1,11 @@
-//#define DEBUG
+#define DEBUG
 
 #ifdef DEBUG
-  #define DEBUG_BEGIN(...)  Serial.begin(__VA_ARGS__)
-  #define DEBUG_PRINTF(...) Serial.printf(__VA_ARGS__)
+#define DEBUG_BEGIN(...)  Serial.begin(__VA_ARGS__)
+#define DEBUG_PRINTF(...) Serial.printf(__VA_ARGS__)
 #else
-  #define DEBUG_BEGIN(...)  // Blank line - no code
-  #define DEBUG_PRINTF(...) // Blank line - no code
+#define DEBUG_BEGIN(...)  // Blank line - no code
+#define DEBUG_PRINTF(...) // Blank line - no code
 #endif
 
 #include <Preferences.h>
@@ -662,8 +662,8 @@ void menuSystem() {
       }
     }
   }
-
   DEBUG_PRINTF("Selected zone/nexa: %d/%d\n", selectedZone, selectedNexa);
+
   while (true) {
     if (digitalRead(LEFT_BUTTON_PIN) == LOW) {
       delay(50); // Debounce delay

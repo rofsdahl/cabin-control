@@ -22,6 +22,8 @@ typedef struct {
   unsigned long id;
 } Nexa;
 
+#define NEXAS_PER_ZONE 2
+
 typedef struct {
   const char* name;
   ZoneType type;

@@ -1,4 +1,4 @@
-#define DEBUG
+//#define DEBUG
 
 #ifdef DEBUG
 #define DEBUG_BEGIN(...)  Serial.begin(__VA_ARGS__)

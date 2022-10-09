@@ -63,7 +63,7 @@ function doGet(e) {
       }
       if (zoneType=="A") {
         // Log set value only for auto-zone
-        headerValues.push("Set "+zoneName);
+        headerValues.push(zoneName + " !");
         row.push(zoneValue);
         // Duty cycle only relevant for auto-zone
         updateCell("Zone "+zoneName+" %", zoneDutyCycle);
@@ -72,8 +72,8 @@ function doGet(e) {
       }
       if (zoneType=="A" || zoneType=="S") {
         // Log temp
-        updateCell("Temp "+zoneName, zoneTemp);
-        headerValues.push(zoneName);
+        updateCell("Zone "+zoneName+" °C", zoneTemp);
+        headerValues.push(zoneName+" °C");
         row.push(zoneTemp);
       }
     }

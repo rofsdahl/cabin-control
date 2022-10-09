@@ -272,9 +272,9 @@ void synchronizeWithRemote(bool reverseSync) {
     snprintf(zoneBuf, sizeof(zoneBuf), "%s;%c;%.1f;%d;%.2f",
              zones[i].name,
              zones[i].type,
-             zones[i].temp,
              // Currently reverse syncing only zone 0
              (reverseSync && i == 0) ? zones[i].value : -1,
+             zones[i].temp,
              dutyCycle);
     url += "&zone=";
     url += urlEncode(zoneBuf);

@@ -23,13 +23,13 @@ function doGet(e) {
   // Handle scheduled temp change
   var scheduleTime = new Date(readCell("Schedule Time", ""));
   var scheduleZone = readCell("Schedule Zone", "");
-  var scheduleTemp = readCell("Schedule Temp", "");
+  var scheduleTemp = readCell("Schedule Value", "");
   if (timestamp > scheduleTime && scheduleZone != "" && scheduleTemp > 0) {
     //console.log("Schedule " + scheduleTemp + " in " + scheduleZone + " at " + scheduleTime);
     updateCell("Zone "+scheduleZone, scheduleTemp);
     updateCell("Schedule Time", "");
     updateCell("Schedule Zone", "");
-    updateCell("Schedule Temp", "");
+    updateCell("Schedule Value", "");
   }
 
   // Prepare to log temperatures
@@ -46,8 +46,8 @@ function doGet(e) {
     if (zone.length >= 5) {
       let zoneName  = zone[0];
       let zoneType  = zone[1];
-      let zoneTemp  = parseFloat(zone[2]);
-      let zoneValue = zone[3];
+      let zoneValue = zone[2];
+      let zoneTemp  = parseFloat(zone[3]);
       let zoneDutyCycle = parseFloat(zone[4]);
 
       if (zoneType=="A" && zoneValue != -1) {

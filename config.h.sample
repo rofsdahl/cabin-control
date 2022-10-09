@@ -1,25 +1,20 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#define WIFI_SSID      "WiFi name"
+#define WIFI_PASSWORD  "WiFi password"
+#define APPS_SCRIPT_ID "Google Apps Script ID"
+#define NEXAS_PER_ZONE 2
+
 #include "typedef.h"
 
-#define WIFI_SSID     "WiFi name"
-#define WIFI_PASSWORD "WiFi password"
-
-#define APPS_SCRIPT_ID "Google Apps Script ID"
-
-// Configure zones with: Name, type, sensor address
+// Configure zones with name, type, sensor and Nexa power plugs:
+// {"Name", zone type, {sensor address}, {{Nexa type, id}, ...}}
 // Note! First zone must be the primary auto-zone
 Zone zones[] = {
-  {"Livingroom", AUTO,   {0xCA,0xFE,0xBA,0xBE,0xCA,0xFE,0xBA,0xBE}},
-  {"Outside",    SENSOR, {0xDE,0xAD,0xBE,0xEF,0xDE,0xAD,0xBE,0xEF}},
-  {"Ext.light",  MANUAL, {                                       }},
-};
-
-// Configure Nexa power plugs with: Zone index, type, id
-Nexa nexa[] = {
-  {0, SIMPLE, 0x000000A1},
-  {2, LEARN,  0xCAFEBABE},
+  {"Livingroom", AUTO,   {0xCA,0xFE,0xBA,0xBE,0xCA,0xFE,0xBA,0xBE}, {{SIMPLE,0x000000A1},{HE35,0x000000A1}}},
+  {"Outside",    SENSOR, {0xDE,0xAD,0xBE,0xEF,0xDE,0xAD,0xBE,0xEF}, {                                     }},
+  {"Ext.light",  MANUAL, {                                       }, {{LEARN, 0xCAFEBABE}                  }},
 };
 
 #endif

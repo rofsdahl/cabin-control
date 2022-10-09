@@ -234,15 +234,14 @@ void updateNexas() {
 
     // Update state
     zones[i].state = newState;
-  }
 
-  // Transmit current zone state for all Nexa power plugs
-  int numNexas = sizeof(nexas) / sizeof(nexas[0]);
-  for (int i = 0; i < numNexas; i++) {
-    DEBUG_PRINTF("-> Zone %s: %d\n", zones[nexas[i].zone].name, zones[nexas[i].zone].state);
-    nexaTx.transmit(nexas[i].type,
-                    nexas[i].id,
-                    zones[nexas[i].zone].state);
+    // Transmit current zone state for all Nexa power plugs
+    for (int j = 0; j < NEXAS_PER_ZONE; j++) {
+      if (zones[i].nexas[j].type != 0) {
+        DEBUG_PRINTF("-> Zone %s (%c): %d\n", zones[i].name, zones[i].nexas[j].type, zones[i].state);
+        nexaTx.transmit(zones[i].nexas[j].type, zones[i].nexas[j].id, zones[i].state);
+      }
+    }
   }
 }
 
@@ -586,6 +585,7 @@ void displayTask(void *params) {
 const char* menuItems[] = {"Select Nexa", "Turn on", "Turn off", "Turn on/off", "Sensors", "Exit"};
 int selectedMenuItem = 0;
 int selectedNexa = 0;
+int selectedZone = 0;
 
 void displayMenuItems() {
   int numMenuItems = sizeof(menuItems) / sizeof(menuItems[0]);
@@ -602,12 +602,12 @@ void displaySelectedNexa() {
   tft.fillRect(0, 0, 135, 26, TFT_BLACK);
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
 
-  tft.drawChar(nexas[selectedNexa].type, 0, -3, 2);
+  tft.drawChar(zones[selectedZone].nexas[selectedNexa].type, 0, -3, 2);
 
   int x = 10;
   int y = -3;
   for (int i = 7; i >= 0; i--) {
-    int value = (nexas[selectedNexa].id >> i * 4 & 0x0000000F);
+    int value = (zones[selectedZone].nexas[selectedNexa].id >> i * 4 & 0x0000000F);
     x += tft.drawChar(value < 10 ? '0' + value : 'A' + value - 10, x, y, 2);
     if (i == 4) {
       x = 10;
@@ -615,7 +615,7 @@ void displaySelectedNexa() {
     }
   }
 
-  tft.drawString(zones[nexas[selectedNexa].zone].name, 45, 0, 4);
+  tft.drawString(zones[selectedZone].name, 45, 0, 4);
   tft.drawLine(0, 26, 135, 26, TFT_YELLOW);
 }
 
@@ -653,10 +653,20 @@ void menuSystem() {
   while (digitalRead(LEFT_BUTTON_PIN) == LOW || digitalRead(RIGHT_BUTTON_PIN) == LOW);
   delay(50); // Debounce delay
 
+  int numMenuItems = sizeof(menuItems) / sizeof(menuItems[0]);
+  int numNexas = 0;
+  for (int i = 0; i < numZones; i++) {
+    for (int j = 0; j < NEXAS_PER_ZONE; j++) {
+      if (zones[i].nexas[j].type != 0) {
+        numNexas++;
+      }
+    }
+  }
+
+  DEBUG_PRINTF("Selected zone/nexa: %d/%d\n", selectedZone, selectedNexa);
   while (true) {
     if (digitalRead(LEFT_BUTTON_PIN) == LOW) {
       delay(50); // Debounce delay
-      int numMenuItems = sizeof(menuItems) / sizeof(menuItems[0]);
       selectedMenuItem = (selectedMenuItem + 1) % numMenuItems;
       displayMenuItems();
       while (digitalRead(LEFT_BUTTON_PIN) == LOW);
@@ -668,7 +678,12 @@ void menuSystem() {
 
       switch (selectedMenuItem) {
         case 0: {
-            selectedNexa = (selectedNexa + 1) % (sizeof(nexas) / sizeof(nexas[0]));
+            selectedNexa++;
+            while (selectedNexa >= NEXAS_PER_ZONE || zones[selectedZone].nexas[selectedNexa].type == 0) {
+              selectedNexa = 0;
+              selectedZone = (selectedZone + 1) % numZones;
+            }
+            DEBUG_PRINTF("Selected zone/nexa: %d/%d\n", selectedZone, selectedNexa);
             displaySelectedNexa();
             while (digitalRead(RIGHT_BUTTON_PIN) == LOW);
             break;
@@ -688,7 +703,9 @@ void menuSystem() {
                 tft.fillCircle(126, 10, 8, TFT_BLACK);
                 tft.drawCircle(126, 10, 8, TFT_YELLOW);
               }
-              nexaTx.transmit(nexas[selectedNexa].type, nexas[selectedNexa].id, activation, 2);
+              nexaTx.transmit(zones[selectedZone].nexas[selectedNexa].type,
+                              zones[selectedZone].nexas[selectedNexa].id,
+                              activation, 2);
             }
             displaySelectedNexa();
             break;

@@ -18,9 +18,15 @@ enum ZoneType {
 };
 
 typedef struct {
+  NexaType type;
+  unsigned long id;
+} Nexa;
+
+typedef struct {
   const char* name;
   ZoneType type;
   uint8_t sensorAddr[8];
+  Nexa nexas[NEXAS_PER_ZONE];
   float temp;
   byte value;
   bool state;
@@ -28,11 +34,5 @@ typedef struct {
   unsigned long tOn;
   unsigned long tAccu;
 } Zone;
-
-typedef struct {
-  int zone;
-  NexaType type;
-  unsigned long id;
-} Nexa;
 
 #endif

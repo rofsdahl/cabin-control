@@ -627,22 +627,24 @@ void displayMenuItems() {
 
 void displaySelectedNexa() {
   tft.fillRect(0, 0, 135, 26, TFT_BLACK);
+  tft.setTextColor(TFT_RED, TFT_BLACK);
+  tft.drawChar(zones[selectedZone].nexas[selectedNexa].type, 0, 0, 4);
+
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-
-  tft.drawChar(zones[selectedZone].nexas[selectedNexa].type, 0, -3, 2);
-
-  int x = 10;
-  int y = -3;
-  for (int i = 7; i >= 0; i--) {
-    int value = (zones[selectedZone].nexas[selectedNexa].id >> i * 4 & 0x0000000F);
-    x += tft.drawChar(value < 10 ? '0' + value : 'A' + value - 10, x, y, 2);
-    if (i == 4) {
-      x = 10;
-      y += 13;
-    }
+  char buf[5];
+  if (zones[selectedZone].nexas[selectedNexa].type == LEARN) {
+    snprintf(buf, sizeof(buf), "%04X", (zones[selectedZone].nexas[selectedNexa].id >> 4*4) & 0x0000FFFF);
+    tft.drawString(buf, 20, -3, 2);
+    snprintf(buf, sizeof(buf), "%04X", (zones[selectedZone].nexas[selectedNexa].id >> 0*4) & 0x0000FFFF);
+    tft.drawString(buf, 20, 10, 2);
+  }
+  else {
+    snprintf(buf, sizeof(buf), "%02X", zones[selectedZone].nexas[selectedNexa].id & 0x000000FF);
+    tft.drawString(buf, 20, 0, 4);
   }
 
-  tft.drawString(zones[selectedZone].name, 45, 0, 4);
+  tft.setTextColor(TFT_GREEN, TFT_BLACK);
+  tft.drawString(zones[selectedZone].name, 55, 0, 4);
   tft.drawLine(0, 26, 135, 26, TFT_YELLOW);
 }
 

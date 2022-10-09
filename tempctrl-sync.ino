@@ -1,4 +1,4 @@
-//#define DEBUG
+#define DEBUG
 
 #ifdef DEBUG
 #define DEBUG_BEGIN(...)  Serial.begin(__VA_ARGS__)
@@ -269,7 +269,7 @@ void synchronizeWithRemote(bool reverseSync) {
     float dutyCycle = (float)zones[i].tAccu / (tNow - tLastSync);
 
     char zoneBuf[40];
-    snprintf(zoneBuf, sizeof(zoneBuf), "%s;%c;%.1f;%d;%.2f",
+    snprintf(zoneBuf, sizeof(zoneBuf), "%s;%c;%d;%.1f;%.2f",
              zones[i].name,
              zones[i].type,
              // Currently reverse syncing only zone 0

@@ -15,7 +15,7 @@ function doGet(e) {
     "%d days, %02d:%02d:%02d", days, hours, mins, secs))
     .setHorizontalAlignment("right");
 
-  updateCell("Error count", getParam(e, "errorCount"));
+  updateCell("Error Count", getParam(e, "errorCount"));
 
   var response = {}
   response["syncInterval"] = readCell("Sync Interval", 60);
@@ -51,7 +51,7 @@ function doGet(e) {
       let zoneDutyCycle = parseFloat(zone[4]);
 
       if (zoneType=="A" && zoneValue != -1) {
-        // Reverse sync for Auto-zones, device -> sheet
+        // Reverse sync for auto-zones, device -> sheet
         // Manual zones may use a formula, so don't overwrite it
         updateCell("Zone "+zoneName, zoneValue);
       }
@@ -60,12 +60,15 @@ function doGet(e) {
         // Manual zones may use a formula
         zoneValue = readCell("Zone "+zoneName, 0);
         response["zone."+zoneName] = zoneValue;
-        updateCell("Zone "+zoneName+" %", zoneDutyCycle);
       }
       if (zoneType=="A") {
-        // Log set value only for Auto zone
+        // Log set value only for auto-zone
         headerValues.push("Set "+zoneName);
         row.push(zoneValue);
+        // Duty cycle only relevant for auto-zone
+        updateCell("Zone "+zoneName+" %", zoneDutyCycle);
+        headerValues.push(zoneName + " %");
+        row.push(zoneDutyCycle);
       }
       if (zoneType=="A" || zoneType=="S") {
         // Log temp
@@ -73,16 +76,11 @@ function doGet(e) {
         headerValues.push(zoneName);
         row.push(zoneTemp);
       }
-      if (zoneType=="A") {
-        // Log duty cycle only for Auto zone
-        headerValues.push(zoneName + " %");
-        row.push(zoneDutyCycle);
-      }
     }
   });
 
   // Log temperatures
-  var logName = Utilities.formatString("%04d-%02d", timestamp.getFullYear(), timestamp.getMonth()+1)
+  var logName = Utilities.formatString("_%04d-%02d", timestamp.getFullYear(), timestamp.getMonth()+1)
   var logSheet = getSheet(logName, 1);
   logSheet.getRange(1, 1, 1, headerValues.length)
           .setValues([headerValues])
@@ -146,7 +144,7 @@ function findCell(key) {
 }
 
 function getStatusSheet() {
-  return getSheet("status", 0);
+  return getSheet("_status", 0);
 }
 
 function getSheet(name, insertIndex) {

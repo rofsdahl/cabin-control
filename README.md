@@ -1,5 +1,5 @@
 # Introduction
-This project is a temperature control system for use in a remote location (e.g. a mountain cabin).
+Temperature control system for use in a remote location (e.g. a mountain cabin).
 
 The system consists of an ESP32 microcontroller from Espressif and one or more Dallas/Maxim DS18B20 digital temperature sensors. The desired temperature is achieved by continuously switching on/off one or more electrical heaters using Nexa power plugs (over RF 433 MHz). The ESP32 device periodically connects to the Internet over WiFi, logging the current temperature into a Google spreadsheet. The spreadsheet is also used for setting the desired temperature, which will be transferred to the device during the next synchronization.
 
@@ -41,10 +41,10 @@ Configuration will be read from the sheet 'config', columns A and B (a sheet wit
 * **Uptime:** Reported uptime from device
 * **Error Count:** Errors counted by device (e.g. HTTP timeout)
 * **Sync Interval:** Interval between each synchronization (in minutes)
-* **Schedule Time:** Scheduled time for applying scheduled temperature as new set temperature
-* **Schedule Zone:** Zone to apply scheduled temperature for
-* **Schedule Temp:** Set temperature to apply at scheduled time
-* **Zone &lt;Name&gt;:** Set (desired) temperature for auto-zone or state (0/1) for manual zone (will be read by device, and updated if changed locally at device)
+* **Schedule Time:** Scheduled time for applying scheduled temperature/value
+* **Schedule Zone:** Zone to apply scheduled temperature/value for
+* **Schedule Value:** Temperature/value to apply at scheduled time
+* **Zone &lt;Name&gt;:** Set (desired) temperature for auto-zone or value (0/1) for manual zone (will be read by device, and updated if changed locally at device)
 * **Temp &lt;Name&gt;:** Current temperature of zone &lt;Name&gt;
 * ...
 
@@ -150,10 +150,8 @@ Use the file `config.h.sample` to create a configuration file `config.h` and ins
     * 'MANUAL': Zone with Nexa power plug(s), but no temperature sensor
   * sensor address (8 bytes)
     * Tip! Addresses of connected sensors can be acquired using the utility menu system, and will be printed to serial output - use Serial Monitor at 115000 baud.
-* Nexa power plugs:
-  * zone index (index of the zone that the Nexa power plug belongs, counting from 0)
-  * type (LEARN/SIMPLE/HE35)
-  * id
+  * type of power plug (LEARN/SIMPLE/HE35)
+  * id of power plug
     * 4 bytes id for 'LEARN'
     * 1 byte House and Unit for 'SIMPLE' and 'HE35' (0x000000HU)
 
@@ -183,6 +181,7 @@ Create a Google spreadsheet with associated Apps Script:
 * [The complete guide for DS18B20 digital temperature sensors with Arduino](https://www.makerguides.com/ds18b20-arduino-tutorial)
 
 ## Nexa protocols
+The system can communicate using the following protocols:
 
 ### Nexa L (Self Learning)
 This protocol is used by today's "System Nexa" power plugs, e.g. [MYCR-3500](https://nexa.se/smarta-hem/systemnexa/plugin/mycr-3500), [MYCR-2300](https://nexa.se/smarta-hem/systemnexa/plugin/mycr-2300), [LCMR-1000](https://nexa.se/smarta-hem/systemnexa/inbyggnadsmottagare/lcmr1000) and EYCR-2300.

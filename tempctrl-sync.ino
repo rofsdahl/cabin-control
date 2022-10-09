@@ -462,6 +462,7 @@ void displayTask(void *params) {
   tft.fillScreen(TFT_BLACK);
   backlight.begin(TFT_BL, 8, 20, 255, 60 * 1000); // 60 sec
 
+  // TODO: Display UTF-8 characters?
   while (true) {
     if (millis() > tNextDisplay) {
 

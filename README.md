@@ -122,6 +122,7 @@ Go to **Tools > Manage libraries** and install the following libraries:
 * **TFT_eSPI** by Bodmer
 * **DallasTemperature** by Miles Burton, Tim Newsomem, etc.
 * **OneWire** by Jim Studt, Tom Pollard, etc.
+* **UrlEncode** by Masayuki Sugahara
 * **Arduino_JSON** by Arduino
 * **Button2** by Lennart Hennigs
 
@@ -142,7 +143,7 @@ Use the file `config.h.sample` to create a configuration file `config.h` and ins
 * WiFi connection properties
 * Google Apps Script ID (see below)
 * Zones:
-  * name (Name, e.g "Livingroom" or "Outside", use only US-ASCII characters)
+  * name (Name, e.g "Livingroom" or "Outside")
   * type (AUTO/SENSOR/MANUAL)
     * 'AUTO': Temperature controlled zone with both temperature sensor and Nexa power plug(s)
     * 'SENSOR': Zone with temperature sensor, but no Nexa power plugs

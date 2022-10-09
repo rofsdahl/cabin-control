@@ -9,7 +9,6 @@
 #define APPS_SCRIPT_ID "Google Apps Script ID"
 
 // Configure zones with: Name, type, sensor address
-// Note! Use only US-ASCII characters in zone names
 // Note! First zone must be the primary auto-zone
 Zone zones[] = {
   {"Livingroom", AUTO,   {0xCA,0xFE,0xBA,0xBE,0xCA,0xFE,0xBA,0xBE}},

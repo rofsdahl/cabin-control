@@ -222,14 +222,15 @@ void updateNexas() {
     }
 
     // Start / stop on-timer
+    unsigned long tNow = millis();
     if (!zones[i].state && newState) {
-      zones[i].tOn = millis();
+      zones[i].tOn = tNow;
       DEBUG_PRINTF(".. Zone %s ON at %d, accumulated = %d\n", zones[i].name, zones[i].tOn, zones[i].tAccu);
     }
     if (zones[i].state && !newState) {
-      unsigned long tPeriod = millis() - zones[i].tOn;
+      unsigned long tPeriod = tNow - zones[i].tOn;
       zones[i].tAccu += tPeriod;
-      DEBUG_PRINTF(".. Zone %s OFF at %d, period = %d, accumulated = %d\n", zones[i].name, millis(), tPeriod, zones[i].tAccu);
+      DEBUG_PRINTF(".. Zone %s OFF at %d, period = %d, accumulated = %d\n", zones[i].name, tNow, tPeriod, zones[i].tAccu);
     }
 
     // Update state
@@ -238,7 +239,7 @@ void updateNexas() {
     // Transmit current zone state for all Nexa power plugs
     for (int j = 0; j < NEXAS_PER_ZONE; j++) {
       if (zones[i].nexas[j].type != 0) {
-        DEBUG_PRINTF("-> Zone %s (%c): %d\n", zones[i].name, zones[i].nexas[j].type, zones[i].state);
+        DEBUG_PRINTF("-> Zone %s/%d: %d\n", zones[i].name, j + 1, zones[i].state);
         nexaTx.transmit(zones[i].nexas[j].type, zones[i].nexas[j].id, zones[i].state);
       }
     }
@@ -665,7 +666,7 @@ void menuSystem() {
       }
     }
   }
-  DEBUG_PRINTF("Selected Nexa: %s/%d\n", zones[selectedZone].name, selectedNexa);
+  DEBUG_PRINTF("Selected Nexa: %s/%d\n", zones[selectedZone].name, selectedNexa + 1);
 
   while (true) {
     if (digitalRead(LEFT_BUTTON_PIN) == LOW) {
@@ -686,7 +687,7 @@ void menuSystem() {
               selectedNexa = 0;
               selectedZone = (selectedZone + 1) % numZones;
             }
-            DEBUG_PRINTF("Selected Nexa: %s/%d\n", zones[selectedZone].name, selectedNexa);
+            DEBUG_PRINTF("Selected Nexa: %s/%d\n", zones[selectedZone].name, selectedNexa + 1);
             displaySelectedNexa();
             while (digitalRead(RIGHT_BUTTON_PIN) == LOW);
             break;

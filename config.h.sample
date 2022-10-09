@@ -1,12 +1,11 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include "typedef.h"
+
 #define WIFI_SSID      "WiFi name"
 #define WIFI_PASSWORD  "WiFi password"
 #define APPS_SCRIPT_ID "Google Apps Script ID"
-#define NEXAS_PER_ZONE 2
-
-#include "typedef.h"
 
 // Configure zones with name, type, sensor and Nexa power plugs:
 // {"Name", zone type, {sensor address}, {{Nexa type, id}, ...}}

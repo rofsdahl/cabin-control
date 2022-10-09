@@ -582,6 +582,33 @@ void displayTask(void *params) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+void displaySensors() {
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+  tft.drawString("Sensors:", 0, 0, 4);
+  tft.drawLine(0, 26, 135, 26, TFT_YELLOW);
+  tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+
+  dallas.begin();
+  int numSensors = dallas.getDeviceCount();
+
+  for (int i = 0; i < numSensors; i++) {
+    DeviceAddress address;
+    dallas.getAddress(address, i);
+
+    char buf[17];
+    snprintf(buf, sizeof(buf), "%02X%02X%02X%02X%02X%02X%02X%02X",
+             address[0], address[1], address[2], address[3],
+             address[4], address[5], address[6], address[7]);
+    tft.drawString(buf, 0, 32 + i * 16, 2);
+
+    DEBUG_PRINTF("Sensor %d: 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X\n",
+                 i + 1,
+                 address[0], address[1], address[2], address[3],
+                 address[4], address[5], address[6], address[7]);
+  }
+}
+
 const char* menuItems[] = {"Select Nexa", "Turn on", "Turn off", "Turn on/off", "Sensors", "Exit"};
 int selectedMenuItem = 0;
 int selectedNexa = 0;
@@ -619,33 +646,6 @@ void displaySelectedNexa() {
   tft.drawLine(0, 26, 135, 26, TFT_YELLOW);
 }
 
-void displaySensors() {
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-  tft.drawString("Sensors:", 0, 0, 4);
-  tft.drawLine(0, 26, 135, 26, TFT_YELLOW);
-  tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
-
-  dallas.begin();
-  int numSensors = dallas.getDeviceCount();
-
-  for (int i = 0; i < numSensors; i++) {
-    DeviceAddress address;
-    dallas.getAddress(address, i);
-
-    char buf[17];
-    snprintf(buf, sizeof(buf), "%02X%02X%02X%02X%02X%02X%02X%02X",
-             address[0], address[1], address[2], address[3],
-             address[4], address[5], address[6], address[7]);
-    tft.drawString(buf, 0, 32 + i * 16, 2);
-
-    DEBUG_PRINTF("Sensor %d: 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X\n",
-                 i + 1,
-                 address[0], address[1], address[2], address[3],
-                 address[4], address[5], address[6], address[7]);
-  }
-}
-
 void menuSystem() {
   tft.fillScreen(TFT_BLACK);
   displayMenuItems();
@@ -662,7 +662,7 @@ void menuSystem() {
       }
     }
   }
-  DEBUG_PRINTF("Selected zone/nexa: %d/%d\n", selectedZone, selectedNexa);
+  DEBUG_PRINTF("Selected Nexa: %s/%d\n", zones[selectedZone].name, selectedNexa);
 
   while (true) {
     if (digitalRead(LEFT_BUTTON_PIN) == LOW) {
@@ -683,7 +683,7 @@ void menuSystem() {
               selectedNexa = 0;
               selectedZone = (selectedZone + 1) % numZones;
             }
-            DEBUG_PRINTF("Selected zone/nexa: %d/%d\n", selectedZone, selectedNexa);
+            DEBUG_PRINTF("Selected Nexa: %s/%d\n", zones[selectedZone].name, selectedNexa);
             displaySelectedNexa();
             while (digitalRead(RIGHT_BUTTON_PIN) == LOW);
             break;

@@ -45,7 +45,7 @@ Configuration will be read from the sheet 'config', columns A and B (a sheet wit
 * **Schedule Zone:** Zone to apply scheduled temperature/value for
 * **Schedule Value:** Temperature/value to apply at scheduled time
 * **Zone &lt;Name&gt;:** Set (desired) temperature for auto-zone or value (0/1) for manual zone (will be read by device, and updated if changed locally at device)
-* **Zone &lt;Name&gt; ℃:** Last reported temperature of zone &lt;Name&gt;
+* **Zone &lt;Name&gt; °C:** Last reported temperature of zone &lt;Name&gt;
 * **Zone &lt;Name&gt; %:** Last reported duty cycle of zone &lt;Name&gt; (percentage heat-on)
 * ...
 

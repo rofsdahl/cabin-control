@@ -3,13 +3,7 @@
 
 #include "nexa-tx.h"
 
-enum Activity {
-  NONE,
-  NEXA,
-  WIFI,
-  TIME,
-  SYNC,
-};
+#define NEXAS_PER_ZONE 2
 
 enum ZoneType {
   AUTO   = 'A',
@@ -21,8 +15,6 @@ typedef struct {
   NexaType type;
   unsigned long id;
 } Nexa;
-
-#define NEXAS_PER_ZONE 2
 
 typedef struct {
   const char* name;

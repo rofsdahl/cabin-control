@@ -3,9 +3,13 @@
 
 #include "typedef.h"
 
+// Define properties for remote sync
 #define WIFI_SSID      "WiFi name"
 #define WIFI_PASSWORD  "WiFi password"
 #define APPS_SCRIPT_ID "Google Apps Script ID"
+
+// Uncomment to enable serial output
+// #define DEBUG
 
 // Configure zones with name, type, sensor and Nexa power plugs:
 // {"Name", zone type, {sensor address}, {{Nexa type, id}, ...}}

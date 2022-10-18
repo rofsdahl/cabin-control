@@ -1,12 +1,4 @@
-#define DEBUG
 
-#ifdef DEBUG
-#define DEBUG_BEGIN(...)  Serial.begin(__VA_ARGS__)
-#define DEBUG_PRINTF(...) Serial.printf(__VA_ARGS__)
-#else
-#define DEBUG_BEGIN(...)  // Blank line - no code
-#define DEBUG_PRINTF(...) // Blank line - no code
-#endif
 
 #include <Preferences.h>
 #include <WiFi.h>
@@ -37,6 +29,16 @@
 #define TIMEOUT_WIFI_CONNECT  10000
 #define TIMEOUT_HTTP          20000
 
+#ifdef DEBUG
+#define DEBUG_BEGIN(...)   Serial.begin(__VA_ARGS__)
+#define DEBUG_PRINTF(...)  Serial.printf(__VA_ARGS__)
+#define DEBUG_PRINTLN(...) Serial.println(__VA_ARGS__)
+#else
+#define DEBUG_BEGIN(...)   // Blank line - no code
+#define DEBUG_PRINTF(...)  // Blank line - no code
+#define DEBUG_PRINTLN(...) // Blank line - no code
+#endif
+
 Preferences preferences;
 TFT_eSPI tft = TFT_eSPI();
 OneWire oneWire(SENSOR_PIN);
@@ -44,6 +46,7 @@ DallasTemperature dallas(&oneWire);
 NexaTx nexaTx = NexaTx(TX_PIN);
 Backlight backlight;
 
+enum Activity { NONE, NEXA, WIFI, TIME, SYNC };
 Activity activity = NONE;
 byte setMode;
 byte setTemp;
@@ -69,7 +72,7 @@ void enableWiFi() {
   WiFi.mode(WIFI_STA);
   delay(200);
 
-  DEBUG_PRINTF("Connecting to WiFi...\n");
+  DEBUG_PRINTLN("Connecting to WiFi...");
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   unsigned long tTimeout = millis() + TIMEOUT_WIFI_CONNECT;
@@ -80,13 +83,13 @@ void enableWiFi() {
     }
     delay(100);
   }
-  DEBUG_PRINTF("-> FAILED!\n");
+  DEBUG_PRINTLN("-> FAILED!");
 }
 
 void disableWiFi() {
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
-  DEBUG_PRINTF("WiFi disconnected!\n");
+  DEBUG_PRINTLN("WiFi disconnected!");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -138,7 +141,7 @@ int calculateDstOffset() {
 }
 
 void adjustTime() {
-  DEBUG_PRINTF("NTP sync...\n");
+  DEBUG_PRINTLN("NTP sync...");
   static int dstOffset = 0;
   int lastDstOffset;
   do {
@@ -175,7 +178,7 @@ int getTempZone(int n) {
 }
 
 void restorePreferences() {
-  DEBUG_PRINTF("Restore preferences...\n");
+  DEBUG_PRINTLN("Restore preferences...");
   // TODO: Check for legal values (temp 5-25, manual 0-1)?
   for (int i = 0; i < numZones; i++) {
     zones[i].value = preferences.getUChar(zones[i].name, 0);
@@ -189,7 +192,7 @@ void restorePreferences() {
 }
 
 void savePreferences() {
-  DEBUG_PRINTF("Save preferences...\n");
+  DEBUG_PRINTLN("Save preferences...");
   for (int i = 0; i < numZones; i++) {
     DEBUG_PRINTF("-> Zone %s: %d\n", zones[i].name, zones[i].value);
     preferences.putUChar(zones[i].name, zones[i].value);
@@ -210,7 +213,7 @@ void readTemperatures() {
 }
 
 void updateNexas() {
-  DEBUG_PRINTF("Update Nexas...\n");
+  DEBUG_PRINTLN("Update Nexas...");
   for (int i = 0; i < numZones; i++) {
     bool newState = zones[i].state;
     if (zones[i].type == AUTO) {
@@ -247,7 +250,7 @@ void updateNexas() {
 }
 
 void synchronizeWithRemote(bool reverseSync) {
-  DEBUG_PRINTF("Synchronize with remote...\n");
+  DEBUG_PRINTLN("Synchronize with remote...");
 
   unsigned long tNow = millis();
 
@@ -769,7 +772,7 @@ void setup() {
   preferences.begin("temp");
   restorePreferences();
 
-  DEBUG_PRINTF("Setup finished - creating tasks...\n");
+  DEBUG_PRINTLN("Setup finished - creating tasks...");
   xTaskCreatePinnedToCore(displayTask, "displayTask", 10000, NULL, 2, NULL, 1);
   xTaskCreatePinnedToCore(buttonTask, "buttonTask", 10000, NULL, 2, NULL, 1);
   xTaskCreatePinnedToCore(controlTask, "controlTask", 10000, NULL, 2, NULL, 1);

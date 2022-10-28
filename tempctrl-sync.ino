@@ -15,16 +15,18 @@
 #include "nexa-tx.h"
 #include "backlight.h"
 
-#define LEFT_BUTTON_PIN    0
-#define RIGHT_BUTTON_PIN  35
-#define SENSOR_PIN        25
-#define TX_PIN            26
+#define PIN_LEFT_BUTTON    0
+#define PIN_RIGHT_BUTTON  35
+#define PIN_SENSOR        25
+#define PIN_TX            26
 
-#define DELAY_STARTUP          4000
-#define DELAY_NEXT_DISPLAY     1000
-#define DELAY_NEXA_UPDATE    300000
-#define TIMEOUT_WIFI_CONNECT  10000
-#define TIMEOUT_HTTP          20000
+#define INTERVAL_DISPLAY_UPDATE              1 * 1000
+#define INTERVAL_TEMP_READING                5 * 1000
+#define INTERVAL_NEXA_UPDATE            5 * 60 * 1000
+#define INTERVAL_TIME_ADJUSTMENT  24 * 60 * 60 * 1000
+#define TIMEOUT_ENTER_MENU                   4 * 1000
+#define TIMEOUT_WIFI_CONNECT                10 * 1000
+#define TIMEOUT_HTTP                        20 * 1000
 
 #ifdef DEBUG
 #define DEBUG_BEGIN(...)   Serial.begin(__VA_ARGS__)
@@ -38,9 +40,9 @@
 
 Preferences preferences;
 TFT_eSPI tft = TFT_eSPI();
-OneWire oneWire(SENSOR_PIN);
+OneWire oneWire(PIN_SENSOR);
 DallasTemperature dallas(&oneWire);
-NexaTx nexaTx = NexaTx(TX_PIN);
+NexaTx nexaTx = NexaTx(PIN_TX);
 Backlight backlight;
 
 enum Activity { NONE, NEXA, WIFI, TIME, SYNC };
@@ -53,12 +55,12 @@ byte maxTemp[] = {15, 25};
 int syncInterval = 60;
 bool doReverseSync = false;
 bool savePrefsPending = false;
+unsigned long tNextTempReading = 0;
 unsigned long tNextNexaUpdate = 0;
 unsigned long tNextSync = 0;
-unsigned long tNextTokenRefresh = 0;
 unsigned long tNextTimeAdjustment = 0;
 unsigned long tLastSync = 0;
-unsigned long tNextDisplay = 0;
+unsigned long tNextDisplayUpdate = 0;
 String accessToken = "";
 int errCount = 0;
 int numZones = sizeof(zones) / sizeof(zones[0]);
@@ -222,10 +224,18 @@ void savePreferences() {
 ////////////////////////////////////////////////////////////////////////////////
 
 void readTemperatures() {
+  DEBUG_PRINTLN("Read temperatures...");
   dallas.requestTemperatures();
   for (int i = 0; i < numZones; i++) {
     if (zones[i].type == AUTO || zones[i].type == SENSOR) {
-      zones[i].temp = dallas.getTempC(zones[i].sensorAddr);
+      DeviceAddress deviceAddr;
+      uint64_t sensorId = zones[i].sensorId;
+      for (int j = 7; j >= 0; j--) {
+        deviceAddr[j] = sensorId & 0x00000000000000FF;
+        sensorId >>= 8;
+      }
+      zones[i].temp = dallas.getTempC(deviceAddr);
+      DEBUG_PRINTF("<- %s (0x%016llX): %.2f\n", zones[i].name, zones[i].sensorId, zones[i].temp);
     }
   }
 }
@@ -260,7 +270,7 @@ void updateNexas() {
     // Transmit current zone state for all Nexa power plugs
     for (int j = 0; j < NEXAS_PER_ZONE; j++) {
       if (zones[i].nexas[j].type != 0) {
-        DEBUG_PRINTF("-> Zone %s/%d: %d\n", zones[i].name, j + 1, zones[i].state);
+        DEBUG_PRINTF("-> Zone %s (Nexa %d): %d\n", zones[i].name, j + 1, zones[i].state);
         nexaTx.transmit(zones[i].nexas[j].type, zones[i].nexas[j].id, zones[i].state);
       }
     }
@@ -334,7 +344,7 @@ void synchronizeWithRemote() {
             int rawValue = (int)json[String("zone.") + zones[i].name];
             int value = normalizeValue(i, rawValue);
             if (rawValue != value) {
-              tNextSync = millis();
+              tNextSync = 0;
               doReverseSync = true;
             }
 
@@ -344,7 +354,7 @@ void synchronizeWithRemote() {
             if (value != zones[i].value) {
               zones[i].value = value;
               savePrefsPending = true;
-              tNextNexaUpdate = millis();
+              tNextNexaUpdate = 0;
             }
             if (i == 0) {
               setTemp = zones[0].value;
@@ -387,11 +397,14 @@ void controlTask(void *params) {
       savePreferences();
     }
 
-    readTemperatures();
+    if (millis() > tNextTempReading) {
+      tNextTempReading = millis() + INTERVAL_TEMP_READING;
+      readTemperatures();
+    }
 
     if (millis() > tNextNexaUpdate) {
       activity = NEXA;
-      tNextNexaUpdate = millis() + DELAY_NEXA_UPDATE;
+      tNextNexaUpdate = millis() + INTERVAL_NEXA_UPDATE;
       updateNexas();
       activity = NONE;
     }
@@ -412,7 +425,7 @@ void controlTask(void *params) {
         // NTP sync at 03:00
         if (dayMin == 3 * 60 || millis() > tNextTimeAdjustment) {
           activity = TIME;
-          tNextTimeAdjustment = millis() + 24 * 60 * 60 * 1000; // 24 hours
+          tNextTimeAdjustment = millis() + INTERVAL_TIME_ADJUSTMENT;
           adjustTime();
           activity = NONE;
         }
@@ -442,7 +455,7 @@ void toggleMode(Button2& btn) {
     prevTemp = zones[0].value;
     zones[0].value = setTemp;
 
-    tNextDisplay = 0;
+    tNextDisplayUpdate = 0;
     savePrefsPending = true;
     tNextNexaUpdate = millis() + 5000; // Wait for another key press
     tNextSync = millis() + 5000; // Wait for another key press
@@ -460,7 +473,7 @@ void increaseTemp(Button2& btn) {
     }
     zones[0].value = setTemp;
 
-    tNextDisplay = 0;
+    tNextDisplayUpdate = 0;
     savePrefsPending = true;
     tNextNexaUpdate = millis() + 5000; // Wait for another key press
     tNextSync = millis() + 5000; // Wait for another key press
@@ -469,10 +482,10 @@ void increaseTemp(Button2& btn) {
 }
 
 void buttonTask(void *params) {
-  Button2 leftBtn = Button2(LEFT_BUTTON_PIN);
+  Button2 leftBtn = Button2(PIN_LEFT_BUTTON);
   leftBtn.setPressedHandler(toggleMode);
 
-  Button2 rightBtn = Button2(RIGHT_BUTTON_PIN);
+  Button2 rightBtn = Button2(PIN_RIGHT_BUTTON);
   rightBtn.setPressedHandler(increaseTemp);
 
   while (true) {
@@ -491,7 +504,8 @@ void displayTask(void *params) {
 
   // TODO: Display UTF-8 characters?
   while (true) {
-    if (millis() > tNextDisplay) {
+    if (millis() > tNextDisplayUpdate) {
+      tNextDisplayUpdate = millis() + INTERVAL_DISPLAY_UPDATE;
 
       struct tm timeinfo;
       getLocalTime(&timeinfo, 100);
@@ -570,7 +584,7 @@ void displayTask(void *params) {
       int n = 0;
       for (int i = 0; i < numZones; i++) {
         if (zones[i].type == AUTO || zones[i].type == MANUAL) {
-          if (zones[i].state != zones[i].lastDisplayedState || tNextDisplay == 0) {
+          if (zones[i].state != zones[i].lastDisplayedState || tNextDisplayUpdate == 0) {
             if (zones[i].state) {
               tft.fillCircle(n * 20 + 8, y + 8, 8, TFT_YELLOW);
               tft.setTextColor(TFT_BLACK);
@@ -600,8 +614,6 @@ void displayTask(void *params) {
       tft.setTextDatum(TR_DATUM);
       x = tft.drawString(text, 135, y, 2);
       tft.fillRect(100, y, 35 - x, 16, TFT_BLACK);
-
-      tNextDisplay = millis() + DELAY_NEXT_DISPLAY;
     }
 
     vTaskDelay(1);
@@ -629,11 +641,7 @@ void displaySensors() {
              address[0], address[1], address[2], address[3],
              address[4], address[5], address[6], address[7]);
     tft.drawString(buf, 0, 32 + i * 16, 2);
-
-    DEBUG_PRINTF("Sensor %d: 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X\n",
-                 i + 1,
-                 address[0], address[1], address[2], address[3],
-                 address[4], address[5], address[6], address[7]);
+    DEBUG_PRINTF("Sensor %d: 0x%s\n", i + 1, buf);
   }
 }
 
@@ -680,7 +688,7 @@ void menuSystem() {
   tft.fillScreen(TFT_BLACK);
   displayMenuItems();
   displaySelectedNexa();
-  while (digitalRead(LEFT_BUTTON_PIN) == LOW || digitalRead(RIGHT_BUTTON_PIN) == LOW);
+  while (digitalRead(PIN_LEFT_BUTTON) == LOW || digitalRead(PIN_RIGHT_BUTTON) == LOW);
   delay(50); // Debounce delay
 
   int numMenuItems = sizeof(menuItems) / sizeof(menuItems[0]);
@@ -695,15 +703,15 @@ void menuSystem() {
   DEBUG_PRINTF("Selected Nexa: %s/%d\n", zones[selectedZone].name, selectedNexa + 1);
 
   while (true) {
-    if (digitalRead(LEFT_BUTTON_PIN) == LOW) {
+    if (digitalRead(PIN_LEFT_BUTTON) == LOW) {
       delay(50); // Debounce delay
       selectedMenuItem = (selectedMenuItem + 1) % numMenuItems;
       displayMenuItems();
-      while (digitalRead(LEFT_BUTTON_PIN) == LOW);
+      while (digitalRead(PIN_LEFT_BUTTON) == LOW);
       delay(50); // Debounce delay
     }
 
-    if (digitalRead(RIGHT_BUTTON_PIN) == LOW) {
+    if (digitalRead(PIN_RIGHT_BUTTON) == LOW) {
       delay(50); // Debounce delay
 
       switch (selectedMenuItem) {
@@ -715,13 +723,13 @@ void menuSystem() {
             }
             DEBUG_PRINTF("Selected Nexa: %s/%d\n", zones[selectedZone].name, selectedNexa + 1);
             displaySelectedNexa();
-            while (digitalRead(RIGHT_BUTTON_PIN) == LOW);
+            while (digitalRead(PIN_RIGHT_BUTTON) == LOW);
             break;
           }
         case 1:
         case 2:
         case 3: {
-            while (digitalRead(RIGHT_BUTTON_PIN) == LOW) {
+            while (digitalRead(PIN_RIGHT_BUTTON) == LOW) {
               bool activation;
               if (selectedMenuItem == 3) activation = !activation;
               else activation = selectedMenuItem == 1;
@@ -742,19 +750,19 @@ void menuSystem() {
           }
         case 4: {
             displaySensors();
-            while (digitalRead(RIGHT_BUTTON_PIN) == LOW);
+            while (digitalRead(PIN_RIGHT_BUTTON) == LOW);
             tft.fillScreen(TFT_BLACK);
             displayMenuItems();
             displaySelectedNexa();
             break;
           }
         default: {
-            while (digitalRead(RIGHT_BUTTON_PIN) == LOW);
+            while (digitalRead(PIN_RIGHT_BUTTON) == LOW);
             return;
           }
       }
 
-      while (digitalRead(RIGHT_BUTTON_PIN) == LOW);
+      while (digitalRead(PIN_RIGHT_BUTTON) == LOW);
       delay(50); // Debounce delay
     }
   }
@@ -773,8 +781,8 @@ void setup() {
   btStop();
   disableWiFi();
 
-  pinMode(LEFT_BUTTON_PIN, INPUT);
-  pinMode(RIGHT_BUTTON_PIN, INPUT);
+  pinMode(PIN_LEFT_BUTTON, INPUT);
+  pinMode(PIN_RIGHT_BUTTON, INPUT);
 
   tft.fillScreen(TFT_BLACK);
   tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
@@ -784,10 +792,10 @@ void setup() {
   tft.drawString(__TIME__, 0, 2 * 13, 2);
   tft.drawString("Press for menu...", 0, 4 * 13, 2);
 
-  unsigned long timeout = millis() + DELAY_STARTUP;
+  unsigned long timeout = millis() + TIMEOUT_ENTER_MENU;
   while (millis() < timeout) {
     tft.drawNumber((timeout - millis()) / 1000, 0, 5 * 13, 2);
-    if (digitalRead(LEFT_BUTTON_PIN) == LOW || digitalRead(RIGHT_BUTTON_PIN) == LOW) {
+    if (digitalRead(PIN_LEFT_BUTTON) == LOW || digitalRead(PIN_RIGHT_BUTTON) == LOW) {
       menuSystem();
     }
   }

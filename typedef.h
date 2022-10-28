@@ -19,7 +19,7 @@ typedef struct {
 typedef struct {
   const char* name;
   ZoneType type;
-  uint8_t sensorAddr[8];
+  uint64_t sensorId;
   Nexa nexas[NEXAS_PER_ZONE];
   float temp;
   byte value;

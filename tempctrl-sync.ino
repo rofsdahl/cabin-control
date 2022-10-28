@@ -301,7 +301,7 @@ void synchronizeWithRemote() {
         zones[i].tOn = tNow;
       }
       dutyCycle = (float)zones[i].tAccu / (tNow - tLastSync);
-      DEBUG_PRINTF(".. Zone %s DC %.2f (%d/(%d-%d))\n", zones[i].name, dutyCycle, zones[i].tAccu, tNow, tLastSync);
+      DEBUG_PRINTF(".. Zone %s DC = %.2f (%d/(%d-%d))\n", zones[i].name, dutyCycle, zones[i].tAccu, tNow, tLastSync);
     }
 
     String zoneParam = urlEncode(zones[i].name) + ";";

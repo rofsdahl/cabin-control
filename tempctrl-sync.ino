@@ -1,5 +1,3 @@
-
-
 #include <Preferences.h>
 #include <WiFi.h>
 #include <TFT_eSPI.h>
@@ -24,8 +22,7 @@
 
 #define DELAY_STARTUP          4000
 #define DELAY_NEXT_DISPLAY     1000
-#define DELAY_NEXA_TRANSMIT    5000
-#define DELAY_REVERSE_SYNC     5000
+#define DELAY_NEXA_UPDATE    300000
 #define TIMEOUT_WIFI_CONNECT  10000
 #define TIMEOUT_HTTP          20000
 
@@ -54,7 +51,7 @@ byte prevTemp;
 byte minTemp[] = { 5, 16};
 byte maxTemp[] = {15, 25};
 int syncInterval = 60;
-bool reverseSyncPending = false;
+bool doReverseSync = false;
 bool savePrefsPending = false;
 unsigned long tNextNexaUpdate = 0;
 unsigned long tNextSync = 0;
@@ -118,9 +115,9 @@ uint8_t weekday(time_t unixTime) {
   return ((unixTime / (24 * 60 * 60)) + 4) % 7;
 }
 
-time_t lastSundayOf(int yearOffset, int month) {
+time_t lastSundayOf(int year, int month) {
   struct tm timeinfo;
-  timeinfo.tm_year = yearOffset;
+  timeinfo.tm_year = year;
   timeinfo.tm_mon = month - 1;
   timeinfo.tm_mday = 31;
   timeinfo.tm_hour = 2;
@@ -177,13 +174,34 @@ int getTempZone(int n) {
   return -1;
 }
 
+int normalizeValue(int zone, int value) {
+  int minValue = zones[zone].type == AUTO ? minTemp[0] : 0;
+  int maxValue = zones[zone].type == AUTO ? maxTemp[1] : 1;
+
+  if (value < minValue)
+    return minValue;
+  else if (value > maxValue)
+    return maxValue;
+  else
+    return value;
+}
+
 void restorePreferences() {
   DEBUG_PRINTLN("Restore preferences...");
-  // TODO: Check for legal values (temp 5-25, manual 0-1)?
+
   for (int i = 0; i < numZones; i++) {
-    zones[i].value = preferences.getUChar(zones[i].name, 0);
-    DEBUG_PRINTF("<- Zone %s: %d\n", zones[i].name, zones[i].value);
+    int rawValue = preferences.getUChar(zones[i].name, 0);
+    int value = normalizeValue(i, rawValue);
+    if (rawValue != value) {
+      //TODO: Remote sync? tNextSync = millis(); doReverseSync = true;
+      savePrefsPending = true;
+    }
+
+    DEBUG_PRINTF("<- Zone %s: %d (raw: %d)\n", zones[i].name, value, rawValue);
+    zones[i].value = value;
   }
+
+  // TODO: Normalize value?
   prevTemp = preferences.getUChar("prevTemp", 0);
   DEBUG_PRINTF("<- prevTemp: %d\n", prevTemp);
 
@@ -249,7 +267,7 @@ void updateNexas() {
   }
 }
 
-void synchronizeWithRemote(bool reverseSync) {
+void synchronizeWithRemote() {
   DEBUG_PRINTLN("Synchronize with remote...");
 
   unsigned long tNow = millis();
@@ -275,8 +293,8 @@ void synchronizeWithRemote(bool reverseSync) {
     snprintf(zoneBuf, sizeof(zoneBuf), "%s;%c;%d;%.1f;%.2f",
              zones[i].name,
              zones[i].type,
-             // Currently reverse syncing only zone 0
-             (reverseSync && i == 0) ? zones[i].value : -1,
+             // TODO: Fix reverse syncing of more zones - can we avoid overwriting formulas?
+             (doReverseSync && i == 0) ? zones[i].value : -1,
              zones[i].temp,
              dutyCycle);
     url += "&zone=";
@@ -288,6 +306,7 @@ void synchronizeWithRemote(bool reverseSync) {
   }
 
   tLastSync = tNow;
+  doReverseSync = false;
 
   int responseCode = 0;
   int maxRedirects = 3;
@@ -312,13 +331,20 @@ void synchronizeWithRemote(bool reverseSync) {
 
         for (int i = 0; i < numZones; i++) {
           if (zones[i].type != SENSOR) {
-            // TODO: Check for legal values (temp 5-25, manual 0-1)?
-            // TODO: Fix invalid values, and sync back (set reverseSync=true)
-            int value = (int)json[String("zone.") + zones[i].name];
-            DEBUG_PRINTF("<- Zone %s: %d (was: %d)\n", zones[i].name, value, zones[i].value);
+            int rawValue = (int)json[String("zone.") + zones[i].name];
+            int value = normalizeValue(i, rawValue);
+            if (rawValue != value) {
+              tNextSync = millis();
+              doReverseSync = true;
+            }
+
+            DEBUG_PRINTF("<- Zone %s: %d (raw: %d, prev: %d)\n", zones[i].name, value, rawValue, zones[i].value);
+
+            // Set new value, save prefs and trigger update of Nexas
             if (value != zones[i].value) {
               zones[i].value = value;
               savePrefsPending = true;
+              tNextNexaUpdate = millis();
             }
             if (i == 0) {
               setTemp = zones[0].value;
@@ -339,6 +365,10 @@ void synchronizeWithRemote(bool reverseSync) {
       url = http.header("Location");
     }
 
+    // TODO: Improve error handling. Have seen -11, meaning what? timeout ?
+    // TODO: 4xx from Google should also be handled
+    // TODO: Display error status on device
+    // TODO: Add reference to HTTPClient doc
     if (responseCode < 0) {
       errCount++;
     }
@@ -353,16 +383,16 @@ void controlTask(void *params) {
 
   while (true) {
     if (savePrefsPending) {
-      savePreferences();
       savePrefsPending = false;
+      savePreferences();
     }
 
     readTemperatures();
 
     if (millis() > tNextNexaUpdate) {
       activity = NEXA;
+      tNextNexaUpdate = millis() + DELAY_NEXA_UPDATE;
       updateNexas();
-      tNextNexaUpdate = millis() + 5000 * 60 * 1000; // 5 min
       activity = NONE;
     }
 
@@ -382,19 +412,15 @@ void controlTask(void *params) {
         // NTP sync at 03:00
         if (dayMin == 3 * 60 || millis() > tNextTimeAdjustment) {
           activity = TIME;
-          adjustTime();
           tNextTimeAdjustment = millis() + 24 * 60 * 60 * 1000; // 24 hours
+          adjustTime();
           activity = NONE;
         }
 
         activity = SYNC;
-        synchronizeWithRemote(reverseSyncPending);
-        reverseSyncPending = false;
         dayMinDone = dayMin;
         tNextSync = millis() + syncInterval * 60 * 1000;
-
-        // Avoid too frequent Nexa updates (pilot signal confusion)
-        tNextNexaUpdate = millis() + DELAY_NEXA_TRANSMIT;
+        synchronizeWithRemote();
         activity = NONE;
       }
 
@@ -407,13 +433,6 @@ void controlTask(void *params) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void triggerReverseSync() {
-  reverseSyncPending = true;
-  // Avoid too rapid Nexa updates (pilot signal confusion)
-  tNextNexaUpdate = millis() + DELAY_REVERSE_SYNC;
-  tNextSync = millis() + DELAY_REVERSE_SYNC;
-}
-
 void toggleMode(Button2& btn) {
   if (!backlight.isBright()) {
     backlight.setBright();
@@ -424,8 +443,10 @@ void toggleMode(Button2& btn) {
     zones[0].value = setTemp;
 
     tNextDisplay = 0;
-    triggerReverseSync();
     savePrefsPending = true;
+    tNextNexaUpdate = millis() + 5000; // Wait for another key press
+    tNextSync = millis() + 5000; // Wait for another key press
+    doReverseSync = true;
   }
 }
 
@@ -440,8 +461,10 @@ void increaseTemp(Button2& btn) {
     zones[0].value = setTemp;
 
     tNextDisplay = 0;
-    triggerReverseSync();
     savePrefsPending = true;
+    tNextNexaUpdate = millis() + 5000; // Wait for another key press
+    tNextSync = millis() + 5000; // Wait for another key press
+    doReverseSync = true;
   }
 }
 

@@ -41,10 +41,10 @@ Configuration will be read from the sheet 'config', columns A and B (a sheet wit
 * **Uptime:** Reported uptime from device
 * **Error Count:** Errors counted by device (e.g. HTTP timeout)
 * **Sync Interval:** Interval between each synchronization (in minutes)
-* **Schedule Time:** Scheduled time for applying scheduled temperature/value
-* **Schedule Zone:** Zone to apply scheduled temperature/value for
-* **Schedule Value:** Temperature/value to apply at scheduled time
-* **Zone &lt;Name&gt;:** Set (desired) temperature for auto-zone or value (0/1) for manual zone (will be read by device, and updated if changed locally at device)
+* **Zone &lt;Name&gt;:** Set (desired) temperature for auto-zone or value (0/1) for manual zone.
+  * This value is normally read from the sheet and synced towards the device
+  * If the value is changed locally at the device (using the buttons), then the value in the sheet will be updated correspondingly
+  * If a formula was used to calculate the cell value (e.g. from a reported temperature), then this formula may get overwritten.
 * **Zone &lt;Name&gt; °C:** Last reported temperature of zone &lt;Name&gt;
 * **Zone &lt;Name&gt; %:** Last reported duty cycle of zone &lt;Name&gt; (percentage heat-on)
 * ...

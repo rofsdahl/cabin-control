@@ -20,18 +20,6 @@ function doGet(e) {
   var response = {}
   response["syncInterval"] = readCell("Sync Interval", 60);
 
-  // Handle scheduled temp change
-  var scheduleTime = new Date(readCell("Schedule Time", ""));
-  var scheduleZone = readCell("Schedule Zone", "");
-  var scheduleTemp = readCell("Schedule Value", "");
-  if (timestamp > scheduleTime && scheduleZone != "" && scheduleTemp > 0) {
-    //console.log("Schedule " + scheduleTemp + " in " + scheduleZone + " at " + scheduleTime);
-    updateCell("Zone "+scheduleZone, scheduleTemp);
-    updateCell("Schedule Time", "");
-    updateCell("Schedule Zone", "");
-    updateCell("Schedule Value", "");
-  }
-
   // Prepare to log temperatures
   var headerValues = ["Time"];
   var row = [timestamp];
@@ -116,7 +104,7 @@ function readCell(key, defaultValue) {
     return cell.getValue();
   }
   else {
-    getStatusSheet().appendRow([key, defaultValue])
+    getConfigSheet().appendRow([key, defaultValue])
     return defaultValue;
   }
 }
@@ -127,13 +115,13 @@ function updateCell(key, value) {
     return cell.setValue(value);
   }
   else {
-    getStatusSheet().appendRow([key, value])
+    getConfigSheet().appendRow([key, value])
     return findCell(key);
   }
 }
 
 function findCell(key) {
-  var sheet = getStatusSheet();
+  var sheet = getConfigSheet();
   for (var row = 1; row <= 20; row++) {
     var r = sheet.getRange(row, 1);
     if (r.getValue() == key) {
@@ -143,8 +131,8 @@ function findCell(key) {
   return null;
 }
 
-function getStatusSheet() {
-  return getSheet("_status", 0);
+function getConfigSheet() {
+  return getSheet("_config", 0);
 }
 
 function getSheet(name, insertIndex) {

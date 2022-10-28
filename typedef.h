@@ -5,11 +5,7 @@
 
 #define NEXAS_PER_ZONE 2
 
-enum ZoneType {
-  AUTO   = 'A',
-  SENSOR = 'S',
-  MANUAL = 'M',
-};
+enum ZoneType { AUTO, SENSOR, MANUAL };
 
 typedef struct {
   NexaType type;

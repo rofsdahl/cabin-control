@@ -291,25 +291,36 @@ void synchronizeWithRemote() {
 
   for (int i = 0; i < numZones; i++) {
 
-    // Accumulate on-timer, calculate and report on-ratio, reset on-timer
-    if (zones[i].state) {
-      unsigned long tPeriod = tNow - zones[i].tOn;
-      zones[i].tAccu += tPeriod;
-      zones[i].tOn = tNow;
+    // TODO: Calculate duty cycle for all zones with sensor and Nexa(s)
+    float dutyCycle;
+    if (i == 0) {
+      // Accumulate on-timer, calculate and report on-ratio, reset on-timer
+      if (zones[i].state) {
+        unsigned long tPeriod = tNow - zones[i].tOn;
+        zones[i].tAccu += tPeriod;
+        zones[i].tOn = tNow;
+      }
+      dutyCycle = (float)zones[i].tAccu / (tNow - tLastSync);
+      DEBUG_PRINTF(".. Zone %s DC %.2f (%d/(%d-%d))\n", zones[i].name, dutyCycle, zones[i].tAccu, tNow, tLastSync);
     }
-    float dutyCycle = (float)zones[i].tAccu / (tNow - tLastSync);
 
-    char zoneBuf[40];
-    snprintf(zoneBuf, sizeof(zoneBuf), "%s;%c;%d;%.1f;%.2f",
-             zones[i].name,
-             zones[i].type,
-             // TODO: Fix reverse syncing of more zones - can we avoid overwriting formulas?
-             (doReverseSync && i == 0) ? zones[i].value : -1,
-             zones[i].temp,
-             dutyCycle);
-    url += "&zone=";
-    url += urlEncode(zoneBuf);
-    DEBUG_PRINTF("-> Zone %s (%d/(%d-%d))\n", zoneBuf, zones[i].tAccu, tNow, tLastSync);
+    String zoneParam = urlEncode(zones[i].name) + ";";
+    if (zones[i].type == AUTO)   zoneParam += "A;";
+    if (zones[i].type == SENSOR) zoneParam += "S;";
+    if (zones[i].type == MANUAL) zoneParam += "M;";
+    // TODO: Add reverse sync of all zones (may overwrite cell formulas)
+    if (doReverseSync && i == 0) zoneParam += zones[i].value;
+    // TODO: Add flag to signal if zone without Nexas (not getting setValue from sheet)
+    // else if (zones[i].nexas[0] == 0) zoneParam += "NA";
+    else zoneParam += "-1";
+    zoneParam += ";";
+    if (zones[i].sensorId != 0) zoneParam += String(zones[i].temp, 1);
+    zoneParam += ";";
+    // TODO: Report duty cycle for all zones with sensor and Nexa(s)
+    if (i == 0) zoneParam += String(dutyCycle, 2);
+
+    DEBUG_PRINTF("-> Zone %s\n", zoneParam.c_str());
+    url += "&zone=" + zoneParam;
 
     // Reset on-timer should ideally be done AFTER successful sync
     zones[i].tAccu = 0;

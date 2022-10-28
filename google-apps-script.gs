@@ -26,7 +26,7 @@ function doGet(e) {
 
   // Sync zone settings and temperatures
   getParams(e, "zone").forEach(it => {
-    // name;type(A/N/S);temp;value
+    // name;type(A/S/M);temp;value
     // A (Auto):   Both sensor and Nexa -> report temp, device value if reverse sync
     // S (Sensor): Only sensor, no Nexa -> report temp, no device value
     // M (Manual): No senor, only Nexa  -> no temp, no device value
@@ -38,27 +38,38 @@ function doGet(e) {
       let zoneTemp  = parseFloat(zone[3]);
       let zoneDutyCycle = parseFloat(zone[4]);
 
-      if (zoneType=="A" && zoneValue != -1) {
+      // TODO: if zoneValue != "" && zoneValue != "NA"
+      if (zoneType == "A" && zoneValue != -1) {
         // Reverse sync for auto-zones, device -> sheet
-        // Manual zones may use a formula, so don't overwrite it
         updateCell("Zone "+zoneName, zoneValue);
       }
-      if (zoneType=="A" || zoneType=="M") {
+
+      // TODO: Repond with "setValue" only for zones with Nexa(s)
+      // TODO: if (zoneValue ! = "NA") {
+      if (zoneType == "A" || zoneType == "M") {
         // Sync zone value, sheet -> device
-        // Manual zones may use a formula
         zoneValue = readCell("Zone "+zoneName, 0);
         response["zone."+zoneName] = zoneValue;
       }
-      if (zoneType=="A") {
+
+      // TODO: Log "setValue" only for zones with sensor and Nexa(s)
+      // TODO: if (zoneTemp != "" && zoneValue != "NA") {
+      if (zoneType == "A") {
         // Log set value only for auto-zone
         headerValues.push(zoneName + " !");
         row.push(zoneValue);
+
+        // TODO: if zoneDutyCycle != ""
+        // TODO: let zoneDutyCycle = parseFloat(zoneDutyCycle);
         // Duty cycle only relevant for auto-zone
         updateCell("Zone "+zoneName+" %", zoneDutyCycle);
         headerValues.push(zoneName + " %");
         row.push(zoneDutyCycle);
       }
-      if (zoneType=="A" || zoneType=="S") {
+
+      // TODO: if zoneTemp != ""
+      // TODO: let zoneTemp = parseFloat(zoneTemp);
+      if (zoneType == "A" || zoneType == "S") {
         // Log temp
         updateCell("Zone "+zoneName+" °C", zoneTemp);
         headerValues.push(zoneName+" °C");

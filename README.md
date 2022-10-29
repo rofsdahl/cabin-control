@@ -41,12 +41,12 @@ Configuration will be read from the sheet 'config', columns A and B (a sheet wit
 * **Uptime:** Reported uptime from device
 * **Error Count:** Errors counted by device (e.g. HTTP timeout)
 * **Sync Interval:** Interval between each synchronization (in minutes)
-* **Zone &lt;Name&gt;:** Set (desired) temperature for auto-zone or value (0/1) for manual zone.
+* **&lt;Name&gt; !:** Set (desired) temperature for auto-zone or value (0/1) for manual zone.
   * This value is normally read from the sheet and synced towards the device
   * If the value is changed locally at the device (using the buttons), then the value in the sheet will be updated correspondingly
   * If a formula was used to calculate the cell value (e.g. from a reported temperature), then this formula may get overwritten
-* **Zone &lt;Name&gt; °C:** Last reported temperature of zone &lt;Name&gt;
-* **Zone &lt;Name&gt; %:** Last reported duty cycle of zone &lt;Name&gt; (percentage heat-on)
+* **&lt;Name&gt; °C:** Last reported temperature of zone &lt;Name&gt;
+* **&lt;Name&gt; %:** Last reported duty cycle of zone &lt;Name&gt; (percentage heat-on)
 * ...
 
 ![Spreadsheet config sheet](images/config.png)<br/>
@@ -61,7 +61,7 @@ You control the menu system using the two buttons:
 
 The menu system contains functionality for:
 * Reading addresses of connected temperature sensors
-* Manually switching Nexa power plugs on/off. This is useful for testing RF communication, and for programming the Nexa Self Learning power plugs
+* Manually switching Nexa power plugs on/off. This is useful for testing RF communication, and for programming the Nexa Self-Learning power plugs
 
 # Hardware
 
@@ -143,15 +143,15 @@ Go to **Tools > Manage libraries** and install the following libraries:
 Use the file `config.h.sample` to create a configuration file `config.h` and insert:
 * WiFi connection properties
 * Google Apps Script ID (see below)
-* Zones:
+* Zones (first zone must be the primary auto-zone)
   * name (Name, e.g "Livingroom" or "Outside")
   * sensor address (8 bytes)
     * Set 0 for manual zones without temperature sensor
     * Tip! Addresses of connected sensors can be acquired using the utility menu system, and will be printed to serial output - use Serial Monitor at 115000 baud.
-  * type of power plug (LEARN/SIMPLE/HE35)
   * id of power plug
-    * 4 bytes id for 'LEARN'
-    * 1 byte House and Unit for 'SIMPLE' and 'HE35' (0x000000HU)
+    * Nexa Self-Learning (System Nexa): 4 bytes id >= 0x00000200
+    * Nexa Simple: 0x000000<H><U> (H=House, U=Unit)
+    * Heat-Link HE35: 0x000001<H><U> (H=House, U=Unit)
 
 ## Configuration of Google spreadsheet
 Create a Google spreadsheet with associated Apps Script:
@@ -181,8 +181,8 @@ Create a Google spreadsheet with associated Apps Script:
 ## Nexa protocols
 The system can communicate using the following protocols:
 
-### Nexa L (Self Learning)
-This protocol is used by today's "System Nexa" power plugs, e.g. [MYCR-3500](https://nexa.se/smarta-hem/systemnexa/plugin/mycr-3500), [MYCR-2300](https://nexa.se/smarta-hem/systemnexa/plugin/mycr-2300), [LCMR-1000](https://nexa.se/smarta-hem/systemnexa/inbyggnadsmottagare/lcmr1000) and EYCR-2300.
+### Nexa Self-Learning (System Nexa)
+This protocol is used by "System Nexa" power plugs, e.g. [MYCR-3500](https://nexa.se/smarta-hem/systemnexa/plugin/mycr-3500), [MYCR-2300](https://nexa.se/smarta-hem/systemnexa/plugin/mycr-2300), [LCMR-1000](https://nexa.se/smarta-hem/systemnexa/inbyggnadsmottagare/lcmr1000) and EYCR-2300.
 
 ![Nexa EYCR-2300](images/EYCR-2300.png)
 

@@ -6,14 +6,9 @@
 #define NEXAS_PER_ZONE 2
 
 typedef struct {
-  NexaType type;
-  unsigned long id;
-} Nexa;
-
-typedef struct {
   const char* name;
   uint64_t sensorId;
-  Nexa nexas[NEXAS_PER_ZONE];
+  unsigned long nexas[NEXAS_PER_ZONE];
   float temp;
   byte value;
   bool state;

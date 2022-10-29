@@ -3,11 +3,7 @@
 
 #include <Arduino.h>
 
-enum NexaType {
-  LEARN  = 'L',
-  SIMPLE = 'S',
-  HE35   = 'H',
-};
+enum NexaType { LEARN, SIMPLE, HE35 };
 
 class NexaTx {
   public:

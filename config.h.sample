@@ -3,7 +3,7 @@
 
 #include "typedef.h"
 
-// Define properties for remote sync
+// Properties for remote sync
 #define WIFI_SSID      "WiFi name"
 #define WIFI_PASSWORD  "WiFi password"
 #define APPS_SCRIPT_ID "Google Apps Script ID"
@@ -11,12 +11,11 @@
 // Uncomment to enable serial output
 // #define DEBUG
 
-// Configure zones: {"Name", sensor address, {{Nexa type, id}, ...}}
-// Note! First zone must be the primary auto-zone
+// Zone configuration {"Name", sensor address, {Nexa id, ...}}
 Zone zones[] = {
-  {"Livingroom", 0xCAFEBABECAFEBABE, {{SIMPLE,0x000000A1},{HE35,0x000000A1}}},
-  {"Outside",    0xDEADBEEFDEADBEEF, {                                     }},
-  {"Ext.light",                   0, {{LEARN, 0xCAFEBABE}                  }},
+  {"Livingroom", 0xCAFEBABECAFEBABE, {0xA1,0x1A1}},
+  {"Outside",    0xDEADBEEFDEADBEEF, {          }},
+  {"Ext.light",                   0, {0xCAFEBABE}},
 };
 
 #endif

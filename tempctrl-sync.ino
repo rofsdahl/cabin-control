@@ -61,7 +61,6 @@ unsigned long tNextSync = 0;
 unsigned long tNextTimeAdjustment = 0;
 unsigned long tLastSync = 0;
 unsigned long tNextDisplayUpdate = 0;
-String accessToken = "";
 int errCount = 0;
 int numZones = sizeof(zones) / sizeof(zones[0]);
 
@@ -192,7 +191,7 @@ void restorePreferences() {
   DEBUG_PRINTLN("Restore preferences...");
 
   for (int i = 0; i < numZones; i++) {
-    if (zones[i].nexas[0].type != 0) {
+    if (zones[i].nexas[0] != 0) {
       int rawValue = preferences.getUChar(zones[i].name, 0);
       int value = normalizeValue(i, rawValue);
       if (rawValue != value) {
@@ -216,7 +215,7 @@ void restorePreferences() {
 void savePreferences() {
   DEBUG_PRINTLN("Save preferences...");
   for (int i = 0; i < numZones; i++) {
-    if (zones[i].nexas[0].type != 0) {
+    if (zones[i].nexas[0] != 0) {
       DEBUG_PRINTF("-> Zone %s: %d\n", zones[i].name, zones[i].value);
       preferences.putUChar(zones[i].name, zones[i].value);
     }
@@ -273,9 +272,14 @@ void updateNexas() {
 
     // Transmit current zone state for all Nexa power plugs
     for (int j = 0; j < NEXAS_PER_ZONE; j++) {
-      if (zones[i].nexas[j].type != 0) {
+      if (zones[i].nexas[j] != 0) {
         DEBUG_PRINTF("-> Zone %s (Nexa %d): %d\n", zones[i].name, j + 1, zones[i].state);
-        nexaTx.transmit(zones[i].nexas[j].type, zones[i].nexas[j].id, zones[i].state);
+
+        NexaType type = SIMPLE;
+        if (zones[i].nexas[j] > 0x00000100) type = HE35;
+        if (zones[i].nexas[j] > 0x00000200) type = LEARN;
+        unsigned long id = zones[i].nexas[j] & (type == LEARN ? 0xFFFFFFFF : 0x000000FF);
+        nexaTx.transmit(type, id, zones[i].state);
       }
     }
   }
@@ -315,7 +319,7 @@ void synchronizeWithRemote() {
     String zoneParam = urlEncode(zones[i].name) + ";";
     // Reverse sync value, blank if no reverse sync or "NA" for zone without Nexas
     if (doReverseSync && i == 0) zoneParam += zones[i].value;
-    else if (zones[i].nexas[0].type == 0) zoneParam += "NA";
+    else if (zones[i].nexas[0] == 0) zoneParam += "NA";
     zoneParam += ";";
     if (zones[i].sensorId != 0) zoneParam += String(zones[i].temp, 1);
     zoneParam += ";";
@@ -354,7 +358,7 @@ void synchronizeWithRemote() {
 
         for (int i = 0; i < numZones; i++) {
           // TODO: Should skip zone if not found in reponse
-          if (zones[i].nexas[0].type != 0) {
+          if (zones[i].nexas[0] != 0) {
             int rawValue = (int)json[String("zone.") + zones[i].name];
             int value = normalizeValue(i, rawValue);
             if (rawValue != value) {
@@ -475,7 +479,7 @@ void toggleMode(Button2& btn) {
     prevTemp = zones[0].value;
     zones[0].value = setTemp;
 
-    tNextDisplayUpdate = 0;
+    tNextDisplayUpdate = millis();
     savePrefsPending = true;
     tNextNexaUpdate = millis() + 5000; // Wait for another key press
     tNextSync = millis() + 5000; // Wait for another key press
@@ -493,7 +497,7 @@ void increaseTemp(Button2& btn) {
     }
     zones[0].value = setTemp;
 
-    tNextDisplayUpdate = 0;
+    tNextDisplayUpdate = millis();
     savePrefsPending = true;
     tNextNexaUpdate = millis() + 5000; // Wait for another key press
     tNextSync = millis() + 5000; // Wait for another key press
@@ -525,8 +529,6 @@ void displayTask(void *params) {
   // TODO: Display UTF-8 characters?
   while (true) {
     if (millis() > tNextDisplayUpdate) {
-      tNextDisplayUpdate = millis() + INTERVAL_DISPLAY_UPDATE;
-
       struct tm timeinfo;
       getLocalTime(&timeinfo, 100);
       char buf[20];
@@ -603,7 +605,8 @@ void displayTask(void *params) {
 
       int n = 0;
       for (int i = 0; i < numZones; i++) {
-        if (zones[i].nexas[0].type != 0) {
+        if (zones[i].nexas[0] != 0) {
+          // Eensure display of initial Nexa state (value is 0 at boot time)
           if (zones[i].state != zones[i].lastDisplayedState || tNextDisplayUpdate == 0) {
             if (zones[i].state) {
               tft.fillCircle(n * 20 + 8, y + 8, 8, TFT_YELLOW);
@@ -634,8 +637,9 @@ void displayTask(void *params) {
       tft.setTextDatum(TR_DATUM);
       x = tft.drawString(text, 135, y, 2);
       tft.fillRect(100, y, 35 - x, 16, TFT_BLACK);
-    }
 
+      tNextDisplayUpdate = millis() + INTERVAL_DISPLAY_UPDATE;
+    }
     vTaskDelay(1);
   }
 }
@@ -684,18 +688,22 @@ void displayMenuItems() {
 void displaySelectedNexa() {
   tft.fillRect(0, 0, 135, 26, TFT_BLACK);
   tft.setTextColor(TFT_RED, TFT_BLACK);
-  tft.drawChar(zones[selectedZone].nexas[selectedNexa].type, 0, 0, 4);
+
+  char type = 'S';
+  if (zones[selectedZone].nexas[selectedNexa] > 0x00000100) type = 'H';
+  if (zones[selectedZone].nexas[selectedNexa] > 0x00000200) type = 'L';
+  tft.drawChar(type, 0, 0, 4);
 
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
   char buf[5];
-  if (zones[selectedZone].nexas[selectedNexa].type == LEARN) {
-    snprintf(buf, sizeof(buf), "%04X", (zones[selectedZone].nexas[selectedNexa].id >> 4*4) & 0x0000FFFF);
+  if (zones[selectedZone].nexas[selectedNexa] > 0x200) {
+    snprintf(buf, sizeof(buf), "%04X", (zones[selectedZone].nexas[selectedNexa] >> 4*4) & 0x0000FFFF);
     tft.drawString(buf, 20, -3, 2);
-    snprintf(buf, sizeof(buf), "%04X", (zones[selectedZone].nexas[selectedNexa].id >> 0*4) & 0x0000FFFF);
+    snprintf(buf, sizeof(buf), "%04X", (zones[selectedZone].nexas[selectedNexa] >> 0*4) & 0x0000FFFF);
     tft.drawString(buf, 20, 10, 2);
   }
   else {
-    snprintf(buf, sizeof(buf), "%02X", zones[selectedZone].nexas[selectedNexa].id & 0x000000FF);
+    snprintf(buf, sizeof(buf), "%02X", zones[selectedZone].nexas[selectedNexa] & 0x000000FF);
     tft.drawString(buf, 20, 0, 4);
   }
 
@@ -715,7 +723,7 @@ void menuSystem() {
   int numNexas = 0;
   for (int i = 0; i < numZones; i++) {
     for (int j = 0; j < NEXAS_PER_ZONE; j++) {
-      if (zones[i].nexas[j].type != 0) {
+      if (zones[i].nexas[j] != 0) {
         numNexas++;
       }
     }
@@ -737,7 +745,7 @@ void menuSystem() {
       switch (selectedMenuItem) {
         case 0: {
             selectedNexa++;
-            while (selectedNexa >= NEXAS_PER_ZONE || zones[selectedZone].nexas[selectedNexa].type == 0) {
+            while (selectedNexa >= NEXAS_PER_ZONE || zones[selectedZone].nexas[selectedNexa] == 0) {
               selectedNexa = 0;
               selectedZone = (selectedZone + 1) % numZones;
             }
@@ -761,9 +769,11 @@ void menuSystem() {
                 tft.fillCircle(126, 10, 8, TFT_BLACK);
                 tft.drawCircle(126, 10, 8, TFT_YELLOW);
               }
-              nexaTx.transmit(zones[selectedZone].nexas[selectedNexa].type,
-                              zones[selectedZone].nexas[selectedNexa].id,
-                              activation, 2);
+              NexaType type = SIMPLE;
+              if (zones[selectedZone].nexas[selectedNexa] > 0x100) type = HE35;
+              if (zones[selectedZone].nexas[selectedNexa] > 0x200) type = LEARN;
+              unsigned long id = zones[selectedZone].nexas[selectedNexa] & (type == LEARN ? 0xFFFFFFFF : 0x000000FF);
+              nexaTx.transmit(type, id, activation, 2);
             }
             displaySelectedNexa();
             break;

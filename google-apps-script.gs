@@ -35,12 +35,12 @@ function doGet(e) {
 
       // Reverse sync when a specific value is reported, device -> sheet
       if (zoneValue != "NA" && zoneValue != "") {
-        updateCell("Zone "+zoneName, zoneValue);
+        updateCell(zoneName + " !", zoneValue);
       }
 
       // Respond with zone value for zones with Nexa(s), sheet -> device
       if (zoneValue != "NA") {
-        zoneValue = readCell("Zone "+zoneName, 0);
+        zoneValue = readCell(zoneName + " !", 0);
         response["zone."+zoneName] = zoneValue;
       }
 
@@ -52,8 +52,7 @@ function doGet(e) {
 
       // Log duty cycle if reported by device
       if (zoneDutyCycle != "") {
-        zoneDutyCycle = parseFloat(zoneDutyCycle);
-        updateCell("Zone "+zoneName+" %", zoneDutyCycle);
+        updateCell(zoneName + " %", zoneDutyCycle);
         headerValues.push(zoneName + " %");
         row.push(zoneDutyCycle);
       }
@@ -61,8 +60,8 @@ function doGet(e) {
       // Log temp if reported by device
       if (zoneTemp != "") {
         zoneTemp = parseFloat(zoneTemp);
-        updateCell("Zone "+zoneName+" °C", zoneTemp);
-        headerValues.push(zoneName+" °C");
+        updateCell(zoneName + " °C", zoneTemp);
+        headerValues.push(zoneName + " °C");
         row.push(zoneTemp);
       }
     }

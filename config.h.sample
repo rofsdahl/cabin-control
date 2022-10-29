@@ -11,13 +11,12 @@
 // Uncomment to enable serial output
 // #define DEBUG
 
-// Configure zones with name, type, sensor and Nexa power plugs:
-// {"Name", zone type, {sensor address}, {{Nexa type, id}, ...}}
+// Configure zones: {"Name", sensor address, {{Nexa type, id}, ...}}
 // Note! First zone must be the primary auto-zone
 Zone zones[] = {
-  {"Livingroom", AUTO,   {0xCA,0xFE,0xBA,0xBE,0xCA,0xFE,0xBA,0xBE}, {{SIMPLE,0x000000A1},{HE35,0x000000A1}}},
-  {"Outside",    SENSOR, {0xDE,0xAD,0xBE,0xEF,0xDE,0xAD,0xBE,0xEF}, {                                     }},
-  {"Ext.light",  MANUAL, {                                       }, {{LEARN, 0xCAFEBABE}                  }},
+  {"Livingroom", 0xCAFEBABECAFEBABE, {{SIMPLE,0x000000A1},{HE35,0x000000A1}}},
+  {"Outside",    0xDEADBEEFDEADBEEF, {                                     }},
+  {"Ext.light",                   0, {{LEARN, 0xCAFEBABE}                  }},
 };
 
 #endif

@@ -145,11 +145,8 @@ Use the file `config.h.sample` to create a configuration file `config.h` and ins
 * Google Apps Script ID (see below)
 * Zones:
   * name (Name, e.g "Livingroom" or "Outside")
-  * type (AUTO/SENSOR/MANUAL)
-    * 'AUTO': Temperature controlled zone with both temperature sensor and Nexa power plug(s)
-    * 'SENSOR': Zone with temperature sensor, but no Nexa power plugs
-    * 'MANUAL': Zone with Nexa power plug(s), but no temperature sensor
   * sensor address (8 bytes)
+    * Set 0 for manual zones without temperature sensor
     * Tip! Addresses of connected sensors can be acquired using the utility menu system, and will be printed to serial output - use Serial Monitor at 115000 baud.
   * type of power plug (LEARN/SIMPLE/HE35)
   * id of power plug

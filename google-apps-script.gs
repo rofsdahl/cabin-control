@@ -26,51 +26,41 @@ function doGet(e) {
 
   // Sync zone settings and temperatures
   getParams(e, "zone").forEach(it => {
-    // name;type(A/S/M);temp;value
-    // A (Auto):   Both sensor and Nexa -> report temp, device value if reverse sync
-    // S (Sensor): Only sensor, no Nexa -> report temp, no device value
-    // M (Manual): No senor, only Nexa  -> no temp, no device value
     let zone = it.split(";");
-    if (zone.length >= 5) {
-      let zoneName  = zone[0];
-      let zoneType  = zone[1];
-      let zoneValue = zone[2];
-      let zoneTemp  = parseFloat(zone[3]);
-      let zoneDutyCycle = parseFloat(zone[4]);
+    if (zone.length >= 4) {
+      let zoneName      = zone[0];
+      let zoneValue     = zone[1];
+      let zoneTemp      = zone[2];
+      let zoneDutyCycle = zone[3];
 
-      // TODO: if zoneValue != "" && zoneValue != "NA"
-      if (zoneType == "A" && zoneValue != -1) {
-        // Reverse sync for auto-zones, device -> sheet
+      // Reverse sync when a specific value is reported, device -> sheet
+      if (zoneValue != "NA" && zoneValue != "") {
         updateCell("Zone "+zoneName, zoneValue);
       }
 
-      // TODO: Repond with "setValue" only for zones with Nexa(s)
-      // TODO: if (zoneValue ! = "NA") {
-      if (zoneType == "A" || zoneType == "M") {
-        // Sync zone value, sheet -> device
+      // Respond with zone value for zones with Nexa(s), sheet -> device
+      if (zoneValue != "NA") {
         zoneValue = readCell("Zone "+zoneName, 0);
         response["zone."+zoneName] = zoneValue;
       }
 
-      // TODO: Log "setValue" only for zones with sensor and Nexa(s)
-      // TODO: if (zoneTemp != "" && zoneValue != "NA") {
-      if (zoneType == "A") {
-        // Log set value only for auto-zone
+      // Log set value for zones with sensor and Nexa(s)
+      if (zoneValue != "NA" && zoneTemp != "") {
         headerValues.push(zoneName + " !");
         row.push(zoneValue);
+      }
 
-        // TODO: if zoneDutyCycle != ""
-        // TODO: let zoneDutyCycle = parseFloat(zoneDutyCycle);
-        // Duty cycle only relevant for auto-zone
+      // Log duty cycle if reported by device
+      if (zoneDutyCycle != "") {
+        zoneDutyCycle = parseFloat(zoneDutyCycle);
         updateCell("Zone "+zoneName+" %", zoneDutyCycle);
         headerValues.push(zoneName + " %");
         row.push(zoneDutyCycle);
       }
 
-      // TODO: if zoneTemp != ""
-      // TODO: let zoneTemp = parseFloat(zoneTemp);
-      if (zoneType == "A" || zoneType == "S") {
-        // Log temp
+      // Log temp if reported by device
+      if (zoneTemp != "") {
+        zoneTemp = parseFloat(zoneTemp);
         updateCell("Zone "+zoneName+" °C", zoneTemp);
         headerValues.push(zoneName+" °C");
         row.push(zoneTemp);

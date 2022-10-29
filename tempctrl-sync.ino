@@ -158,7 +158,7 @@ void adjustTime() {
 int getNumTempZones() {
   int numTempZones = 0;
   for (int i = 0; i < numZones; i++) {
-    if (zones[i].type == AUTO || zones[i].type == SENSOR) {
+    if (zones[i].sensorId != 0) {
       numTempZones++;
     }
   }
@@ -168,7 +168,7 @@ int getNumTempZones() {
 int getTempZone(int n) {
   int t = 0;
   for (int i = 0; i < numZones; i++) {
-    if (zones[i].type == AUTO || zones[i].type == SENSOR) {
+    if (zones[i].sensorId != 0) {
       if (n == t) return i;
       else t++;
     }
@@ -177,8 +177,8 @@ int getTempZone(int n) {
 }
 
 int normalizeValue(int zone, int value) {
-  int minValue = zones[zone].type == AUTO ? minTemp[0] : 0;
-  int maxValue = zones[zone].type == AUTO ? maxTemp[1] : 1;
+  int minValue = zones[zone].sensorId != 0 ? minTemp[0] : 0;
+  int maxValue = zones[zone].sensorId != 0 ? maxTemp[1] : 1;
 
   if (value < minValue)
     return minValue;
@@ -192,15 +192,17 @@ void restorePreferences() {
   DEBUG_PRINTLN("Restore preferences...");
 
   for (int i = 0; i < numZones; i++) {
-    int rawValue = preferences.getUChar(zones[i].name, 0);
-    int value = normalizeValue(i, rawValue);
-    if (rawValue != value) {
-      //TODO: Remote sync? tNextSync = millis(); doReverseSync = true;
-      savePrefsPending = true;
-    }
+    if (zones[i].nexas[0].type != 0) {
+      int rawValue = preferences.getUChar(zones[i].name, 0);
+      int value = normalizeValue(i, rawValue);
+      if (rawValue != value) {
+        //TODO: Remote sync? tNextSync = millis(); doReverseSync = true;
+        savePrefsPending = true;
+      }
 
-    DEBUG_PRINTF("<- Zone %s: %d (raw: %d)\n", zones[i].name, value, rawValue);
-    zones[i].value = value;
+      DEBUG_PRINTF("<- Zone %s: %d (raw: %d)\n", zones[i].name, value, rawValue);
+      zones[i].value = value;
+    }
   }
 
   // TODO: Normalize value?
@@ -214,8 +216,10 @@ void restorePreferences() {
 void savePreferences() {
   DEBUG_PRINTLN("Save preferences...");
   for (int i = 0; i < numZones; i++) {
-    DEBUG_PRINTF("-> Zone %s: %d\n", zones[i].name, zones[i].value);
-    preferences.putUChar(zones[i].name, zones[i].value);
+    if (zones[i].nexas[0].type != 0) {
+      DEBUG_PRINTF("-> Zone %s: %d\n", zones[i].name, zones[i].value);
+      preferences.putUChar(zones[i].name, zones[i].value);
+    }
   }
   DEBUG_PRINTF("-> prevTemp: %d\n", prevTemp);
   preferences.putUChar("prevTemp", prevTemp);
@@ -227,7 +231,7 @@ void readTemperatures() {
   DEBUG_PRINTLN("Read temperatures...");
   dallas.requestTemperatures();
   for (int i = 0; i < numZones; i++) {
-    if (zones[i].type == AUTO || zones[i].type == SENSOR) {
+    if (zones[i].sensorId != 0) {
       DeviceAddress deviceAddr;
       uint64_t sensorId = zones[i].sensorId;
       for (int j = 7; j >= 0; j--) {
@@ -244,11 +248,11 @@ void updateNexas() {
   DEBUG_PRINTLN("Update Nexas...");
   for (int i = 0; i < numZones; i++) {
     bool newState = zones[i].state;
-    if (zones[i].type == AUTO) {
+    if (zones[i].sensorId != 0) {
       float tempOffset = zones[i].state ? 0.1 : -0.1;
       newState = zones[i].temp < (zones[i].value + tempOffset);
     }
-    if (zones[i].type == MANUAL) {
+    else {
       newState = zones[i].value > 0;
     }
 
@@ -304,19 +308,15 @@ void synchronizeWithRemote() {
       DEBUG_PRINTF(".. Zone %s DC = %.2f (%d/(%d-%d))\n", zones[i].name, dutyCycle, zones[i].tAccu, tNow, tLastSync);
     }
 
-    String zoneParam = urlEncode(zones[i].name) + ";";
-    if (zones[i].type == AUTO)   zoneParam += "A;";
-    if (zones[i].type == SENSOR) zoneParam += "S;";
-    if (zones[i].type == MANUAL) zoneParam += "M;";
     // TODO: Add reverse sync of all zones (may overwrite cell formulas)
+    // TODO: Report duty cycle for all zones with sensor and Nexa(s)
+    String zoneParam = urlEncode(zones[i].name) + ";";
+    // Reverse sync value, blank if no reverse sync or "NA" for zone without Nexas
     if (doReverseSync && i == 0) zoneParam += zones[i].value;
-    // TODO: Add flag to signal if zone without Nexas (not getting setValue from sheet)
-    // else if (zones[i].nexas[0] == 0) zoneParam += "NA";
-    else zoneParam += "-1";
+    else if (zones[i].nexas[0].type == 0) zoneParam += "NA";
     zoneParam += ";";
     if (zones[i].sensorId != 0) zoneParam += String(zones[i].temp, 1);
     zoneParam += ";";
-    // TODO: Report duty cycle for all zones with sensor and Nexa(s)
     if (i == 0) zoneParam += String(dutyCycle, 2);
 
     DEBUG_PRINTF("-> Zone %s\n", zoneParam.c_str());
@@ -351,7 +351,8 @@ void synchronizeWithRemote() {
       if (JSON.typeof(json) == "object") {
 
         for (int i = 0; i < numZones; i++) {
-          if (zones[i].type != SENSOR) {
+          // TODO: Should skip zone if not found in reponse
+          if (zones[i].nexas[0].type != 0) {
             int rawValue = (int)json[String("zone.") + zones[i].name];
             int value = normalizeValue(i, rawValue);
             if (rawValue != value) {
@@ -594,7 +595,7 @@ void displayTask(void *params) {
 
       int n = 0;
       for (int i = 0; i < numZones; i++) {
-        if (zones[i].type == AUTO || zones[i].type == MANUAL) {
+        if (zones[i].nexas[0].type != 0) {
           if (zones[i].state != zones[i].lastDisplayedState || tNextDisplayUpdate == 0) {
             if (zones[i].state) {
               tft.fillCircle(n * 20 + 8, y + 8, 8, TFT_YELLOW);

@@ -5,8 +5,6 @@
 
 #define NEXAS_PER_ZONE 2
 
-enum ZoneType { AUTO, SENSOR, MANUAL };
-
 typedef struct {
   NexaType type;
   unsigned long id;
@@ -14,7 +12,6 @@ typedef struct {
 
 typedef struct {
   const char* name;
-  ZoneType type;
   uint64_t sensorId;
   Nexa nexas[NEXAS_PER_ZONE];
   float temp;

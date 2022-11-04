@@ -24,7 +24,7 @@
 #define INTERVAL_TEMP_READING                5 * 1000
 #define INTERVAL_NEXA_UPDATE            5 * 60 * 1000
 #define INTERVAL_TIME_ADJUSTMENT  24 * 60 * 60 * 1000
-#define TIMEOUT_ENTER_MENU                   4 * 1000
+#define TIMEOUT_KEYPRESS                     5 * 1000
 #define TIMEOUT_WIFI_CONNECT                10 * 1000
 #define TIMEOUT_HTTP                        20 * 1000
 
@@ -481,8 +481,8 @@ void toggleMode(Button2& btn) {
 
     tNextDisplayUpdate = millis();
     savePrefsPending = true;
-    tNextNexaUpdate = millis() + 5000; // Wait for another key press
-    tNextSync = millis() + 5000; // Wait for another key press
+    tNextNexaUpdate = millis() + TIMEOUT_KEYPRESS;
+    tNextSync = millis() + TIMEOUT_KEYPRESS;
     doReverseSync = true;
   }
 }
@@ -499,8 +499,8 @@ void increaseTemp(Button2& btn) {
 
     tNextDisplayUpdate = millis();
     savePrefsPending = true;
-    tNextNexaUpdate = millis() + 5000; // Wait for another key press
-    tNextSync = millis() + 5000; // Wait for another key press
+    tNextNexaUpdate = millis() + TIMEOUT_KEYPRESS;
+    tNextSync = millis() + TIMEOUT_KEYPRESS;
     doReverseSync = true;
   }
 }
@@ -803,17 +803,16 @@ void menuSystem() {
 void setup() {
   DEBUG_BEGIN(115200);
 
-  dallas.begin();
-  tft.init();
-  tft.setRotation(0);
-  tft.setTextSize(1);
-
   btStop();
   disableWiFi();
+  dallas.begin();
 
   pinMode(PIN_LEFT_BUTTON, INPUT);
   pinMode(PIN_RIGHT_BUTTON, INPUT);
 
+  tft.init();
+  tft.setRotation(0);
+  tft.setTextSize(1);
   tft.fillScreen(TFT_BLACK);
   tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
   tft.setTextDatum(TL_DATUM);
@@ -822,7 +821,7 @@ void setup() {
   tft.drawString(__TIME__, 0, 2 * 13, 2);
   tft.drawString("Press for menu...", 0, 4 * 13, 2);
 
-  unsigned long timeout = millis() + TIMEOUT_ENTER_MENU;
+  unsigned long timeout = millis() + TIMEOUT_KEYPRESS;
   while (millis() < timeout) {
     tft.drawNumber((timeout - millis()) / 1000, 0, 5 * 13, 2);
     if (digitalRead(PIN_LEFT_BUTTON) == LOW || digitalRead(PIN_RIGHT_BUTTON) == LOW) {

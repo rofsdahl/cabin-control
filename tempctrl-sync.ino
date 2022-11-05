@@ -175,10 +175,7 @@ int getTempZone(int n) {
   return -1;
 }
 
-int normalizeValue(int zone, int value) {
-  int minValue = zones[zone].sensorId != 0 ? minTemp[0] : 0;
-  int maxValue = zones[zone].sensorId != 0 ? maxTemp[1] : 1;
-
+byte normalizeValue(byte value, byte minValue, byte maxValue) {
   if (value < minValue)
     return minValue;
   else if (value > maxValue)
@@ -187,29 +184,36 @@ int normalizeValue(int zone, int value) {
     return value;
 }
 
+byte normalizeValue(byte value, int zone) {
+  byte minValue = zones[zone].sensorId != 0 ? minTemp[0] : 0;
+  byte maxValue = zones[zone].sensorId != 0 ? maxTemp[1] : 1;
+  return normalizeValue(value, minValue, maxValue);
+}
+
 void restorePreferences() {
   DEBUG_PRINTLN("Restore preferences...");
 
   for (int i = 0; i < numZones; i++) {
     if (zones[i].nexas[0] != 0) {
-      int rawValue = preferences.getUChar(zones[i].name, 0);
-      int value = normalizeValue(i, rawValue);
-      if (rawValue != value) {
-        //TODO: Remote sync? tNextSync = millis(); doReverseSync = true;
+      byte rawValue = preferences.getUChar(zones[i].name, 0);
+      zones[i].value = normalizeValue(rawValue, i);
+      if (zones[i].value != rawValue) {
         savePrefsPending = true;
       }
-
-      DEBUG_PRINTF("<- Zone %s: %d (raw: %d)\n", zones[i].name, value, rawValue);
-      zones[i].value = value;
+      DEBUG_PRINTF("<- Zone %s: %d (raw: %d)\n", zones[i].name, zones[i].value, rawValue);
     }
   }
 
-  // TODO: Normalize value?
-  prevTemp = preferences.getUChar("prevTemp", 0);
-  DEBUG_PRINTF("<- prevTemp: %d\n", prevTemp);
-
   setTemp = zones[0].value;
   setMode = setTemp >= minTemp[1] ? 1 : 0;
+
+  byte prevMode = (setMode + 1) % 2;
+  byte rawValue = preferences.getUChar("prevTemp", 0);
+  prevTemp = normalizeValue(rawValue, minTemp[prevMode], maxTemp[prevMode]);
+  if (prevTemp != rawValue) {
+    savePrefsPending = true;
+  }
+  DEBUG_PRINTF("<- prevTemp: %d (raw: %d)\n", prevTemp, rawValue);
 }
 
 void savePreferences() {
@@ -227,7 +231,7 @@ void savePreferences() {
 ////////////////////////////////////////////////////////////////////////////////
 
 void readTemperatures() {
-  DEBUG_PRINTLN("Read temperatures...");
+  //DEBUG_PRINTLN("Read temperatures...");
   dallas.requestTemperatures();
   for (int i = 0; i < numZones; i++) {
     if (zones[i].sensorId != 0) {
@@ -238,7 +242,7 @@ void readTemperatures() {
         sensorId >>= 8;
       }
       zones[i].temp = dallas.getTempC(deviceAddr);
-      DEBUG_PRINTF("<- %s (0x%016llX): %.2f\n", zones[i].name, zones[i].sensorId, zones[i].temp);
+      //DEBUG_PRINTF("<- %s (0x%016llX): %.2f\n", zones[i].name, zones[i].sensorId, zones[i].temp);
     }
   }
 }
@@ -360,7 +364,7 @@ void synchronizeWithRemote() {
           // TODO: Should skip zone if not found in reponse
           if (zones[i].nexas[0] != 0) {
             int rawValue = (int)json[String("zone.") + zones[i].name];
-            int value = normalizeValue(i, rawValue);
+            int value = normalizeValue(rawValue, i);
             if (rawValue != value) {
               tNextSync = 0;
               doReverseSync = true;

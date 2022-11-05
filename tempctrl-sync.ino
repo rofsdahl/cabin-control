@@ -373,7 +373,6 @@ void synchronizeWithRemote() {
             DEBUG_PRINTF("<- Zone %s: %d (raw: %d, prev: %d)\n", zones[i].name, value, rawValue, zones[i].value);
 
             // Set new value, save prefs and trigger update of Nexas
-
             if (value != zones[i].value) {
               zones[i].value = value;
               savePrefsPending = true;
@@ -530,7 +529,6 @@ void displayTask(void *params) {
   tft.fillScreen(TFT_BLACK);
   backlight.begin(TFT_BL, 8, 20, 255, 60 * 1000); // 60 sec
 
-  // TODO: Display UTF-8 characters?
   while (true) {
     if (millis() > tNextDisplayUpdate) {
       struct tm timeinfo;
@@ -814,21 +812,26 @@ void setup() {
   pinMode(PIN_LEFT_BUTTON, INPUT);
   pinMode(PIN_RIGHT_BUTTON, INPUT);
 
+  // TODO: Display accented characters (æøå)?
   tft.init();
   tft.setRotation(0);
   tft.setTextSize(1);
   tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
   tft.setTextDatum(TL_DATUM);
-  tft.drawString("ESP32 Temp Control", 0, 0 * 13, 2);
-  tft.drawString(__DATE__, 0, 1 * 13, 2);
-  tft.drawString(__TIME__, 0, 2 * 13, 2);
-  tft.drawString("Press for menu...", 0, 4 * 13, 2);
+  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+  tft.drawString("Cabin Ctrl.", 0, 0, 4);
+  tft.drawLine(0, 26, 135, 26, TFT_YELLOW);
+  tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+  tft.drawString(__DATE__, 0, 32, 4);
+  tft.drawString(__TIME__, 0, 58, 4);
+  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+  tft.drawString("M: Menu...", 0, 110, 4);
+  tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
 
   unsigned long timeout = millis() + TIMEOUT_KEYPRESS;
   while (millis() < timeout) {
-    tft.drawNumber((timeout - millis()) / 1000, 0, 5 * 13, 2);
-    if (digitalRead(PIN_LEFT_BUTTON) == LOW || digitalRead(PIN_RIGHT_BUTTON) == LOW) {
+    tft.drawNumber((timeout - millis()) / 1000, 0, 136, 4);
+    if (digitalRead(PIN_LEFT_BUTTON) == LOW) {
       menuSystem();
     }
   }

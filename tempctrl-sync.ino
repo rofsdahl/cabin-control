@@ -292,13 +292,10 @@ void updateNexas() {
 
 void synchronizeWithRemote() {
   DEBUG_PRINTLN("Synchronize with remote...");
-
   unsigned long tNow = millis();
 
-  // TODO: Support using dev script also (is it always valid?)
   String url = "https://script.google.com/macros/s/" APPS_SCRIPT_ID "/exec?uptime=";
   url += getUptimeMillis() / 1000;
-
   url += "&errorCount=";
   url += errCount;
 
@@ -827,13 +824,13 @@ void setup() {
   tft.setTextSize(1);
   tft.fillScreen(TFT_BLACK);
   tft.setTextDatum(TL_DATUM);
-  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+  tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
   tft.drawString("Cabin Ctrl.", 0, 0, 4);
-  tft.drawLine(0, 26, 135, 26, TFT_YELLOW);
+  tft.drawLine(0, 26, 135, 26, TFT_LIGHTGREY);
   tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
   tft.drawString(__DATE__, 0, 32, 4);
   tft.drawString(__TIME__, 0, 58, 4);
-  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+  tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
   tft.drawString("M: Menu...", 0, 110, 4);
   tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
 
@@ -844,6 +841,8 @@ void setup() {
       menuSystem();
     }
   }
+
+  DEBUG_PRINTLN("*** Cabin Control ***");
 
   preferences.begin("temp");
   restorePreferences();

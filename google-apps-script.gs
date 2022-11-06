@@ -35,12 +35,12 @@ function doGet(e) {
 
       // Reverse sync when a specific value is reported, device -> sheet
       if (zoneValue != "NA" && zoneValue != "") {
-        updateCell("Zone " + zoneName + " !", zoneValue);
+        updateCell("Zone " + zoneName, zoneValue);
       }
 
       // Respond with zone value for zones with Nexa(s), sheet -> device
       if (zoneValue != "NA") {
-        zoneValue = readCell("Zone " + zoneName + " !", 0);
+        zoneValue = readCell("Zone " + zoneName, 0);
         response["zone." + zoneName] = zoneValue;
       }
 
@@ -68,7 +68,7 @@ function doGet(e) {
   });
 
   // Log temperatures
-  var logName = Utilities.formatString("_%04d-%02d", timestamp.getFullYear(), timestamp.getMonth()+1)
+  var logName = Utilities.formatString("%04d-%02d", timestamp.getFullYear(), timestamp.getMonth()+1)
   var logSheet = getSheet(logName, 1);
   logSheet.getRange(1, 1, 1, headerValues.length)
           .setValues([headerValues])
@@ -132,7 +132,7 @@ function findCell(key) {
 }
 
 function getConfigSheet() {
-  return getSheet("_config", 0);
+  return getSheet("config", 0);
 }
 
 function getSheet(name, insertIndex) {

@@ -11,7 +11,7 @@
 // Uncomment to enable serial output
 // #define DEBUG
 
-// Zone configuration {"Name", sensor address, {Nexa id, ...}}
+// Zone configuration {"Name", sensor address, {Nexa id, Nexa id}}
 Zone zones[] = {
   {"Livingroom", 0xCAFEBABECAFEBABE, {0xA1,0x1A1}},
   {"Outside",    0xDEADBEEFDEADBEEF, {          }},

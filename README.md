@@ -29,7 +29,7 @@ The current device activity is displayed at bottom right:
 The two buttons are used for adjusting the desired temperature locally (when you are on-site):
 * M: Toggle between temperature modes: frost protection / comfort mode
 * +: Increment desired temperature for the currently selected mode. The temperature will roll over from max to min (e.g. 16, 17, ... 24, 25, 16, 17, ...)
-* Note! The buttons control the first configured zone (index 0), so this need to be the primary auto-zone.
+* Note! The buttons control the first configured zone (index 0), so this need to be the primary temperature zone.
 
 ## Synchronization
 Temperatures will be appended to sheet '&lt;yyyy-mm&gt;' in the configured Google spreadsheet (the sheet will be created if it doesn't exist):
@@ -41,7 +41,7 @@ Configuration will be read from the sheet 'config', columns A and B (a sheet wit
 * **Uptime:** Reported uptime from device
 * **Error Count:** Errors counted by device (e.g. HTTP timeout)
 * **Sync Interval:** Interval between each synchronization (in minutes)
-* **&lt;Name&gt; !:** Set (desired) temperature for auto-zone or value (0/1) for manual zone.
+* **&lt;Name&gt; !:** Set (desired) temperature for temperature zone or value (0/1) for manual zone.
   * This value is normally read from the sheet and synced towards the device
   * If the value is changed locally at the device (using the buttons), then the value in the sheet will be updated correspondingly
   * If a formula was used to calculate the cell value (e.g. from a reported temperature), then this formula may get overwritten
@@ -143,15 +143,16 @@ Go to **Tools > Manage libraries** and install the following libraries:
 Use the file `config.h.sample` to create a configuration file `config.h` and insert:
 * WiFi connection properties
 * Google Apps Script ID (see below)
-* Zones (first zone must be the primary auto-zone)
-  * name (Name, e.g "Livingroom" or "Outside")
-  * sensor address (8 bytes)
-    * Set 0 for manual zones without temperature sensor
-    * Tip! Addresses of connected sensors can be acquired using the utility menu system, and will be printed to serial output - use Serial Monitor at 115000 baud.
-  * id of power plug
+* Zones:
+  * Format: {"Name", sensor address, {Nexa id, Nexa id}}
+  * Note that the first zone must be the primary temperature zone
+  * Sensor address (8 bytes)
+    * Set to 0 for manual zone without temperature sensor
+    * Tip! Addresses of connected sensors can be read using the utility menu system, and will be printed to serial output - use Serial Monitor at 115000 baud.
+  * One or two Nexa power plugs can be configured per zone:
     * Nexa Self-Learning (System Nexa): 4 bytes id >= 0x00000200
     * Nexa Simple: 0x000000<H><U> (H=House, U=Unit)
-    * Heat-Link HE35: 0x000001<H><U> (H=House, U=Unit)
+    * Heat-Link HE35: 0x000001<H><U> (H=House, U=Unit) (e.g. A1 -> 0x1A1) 
 
 ## Configuration of Google spreadsheet
 Create a Google spreadsheet with associated Apps Script:

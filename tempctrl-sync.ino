@@ -370,8 +370,9 @@ void synchronizeWithRemote() {
           // Skip zones without Nexas
           if (zones[i].nexas[0] == 0)
             continue;
+          if (json[String("zone.") + zones[i].name] == null)
+            continue;
 
-          // TODO: Should skip zone if not found in response
           int rawValue = (int)json[String("zone.") + zones[i].name];
           int value = normalizeValue(rawValue, i);
           if (rawValue != value) {

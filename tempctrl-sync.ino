@@ -304,7 +304,7 @@ void synchronizeWithRemote() {
 
   for (int i = 0; i < numZones; i++) {
 
-    // TODO: Calculate duty cycle for all zones with sensor and Nexa(s)
+    // TODO: Calculate duty cycle for all zones with sensor and Nexas
     int dutyCyclePercent;
     if (i == 0) {
       // Accumulate on-timer, calculate and report duty cycle, reset on-timer
@@ -313,28 +313,33 @@ void synchronizeWithRemote() {
         zones[i].tAccu += tPeriod;
         zones[i].tOn = tNow;
       }
-
       // TODO: Integer division with rounding (995/1000 should be 100%)
       dutyCyclePercent = zones[i].tAccu * 100 / (tNow - tLastSync);
       DEBUG_PRINTF(".. Zone %s duty cycle = %d %% (%d*100/(%d-%d))\n", zones[i].name, dutyCyclePercent, zones[i].tAccu, tNow, tLastSync);
+      zones[i].tAccu = 0;
     }
 
-    // TODO: Support reverse sync of all zones? (may overwrite cell formulas)
-    // TODO: Report duty cycle for all zones with sensor and Nexa(s)
+    // Zone:<name>;<value|blank|NA>;<temp|blank>;<duty cycle|blank>
     String zoneParam = urlEncode(zones[i].name) + ";";
+
     // Reverse sync value, blank if no reverse sync or "NA" for zone without Nexas
-    if (doReverseSync && i == 0) zoneParam += zones[i].value;
-    else if (zones[i].nexas[0] == 0) zoneParam += "NA";
+    if (zones[i].nexas[0] == 0)
+      zoneParam += "NA";
+    // TODO: Support reverse sync of all zones? (may overwrite cell formulas)
+    else if (doReverseSync && i == 0)
+      zoneParam += zones[i].value;
     zoneParam += ";";
-    if (zones[i].sensorId != 0) zoneParam += String(zones[i].temp, 1);
+
+    if (zones[i].sensorId != 0)
+      zoneParam += String(zones[i].temp, 1);
     zoneParam += ";";
-    if (i == 0) zoneParam += dutyCyclePercent;
+
+    // TODO: Report duty cycle for all zones with sensor and Nexas
+    if (i == 0)
+      zoneParam += dutyCyclePercent;
 
     DEBUG_PRINTF("-> Zone %s\n", zoneParam.c_str());
     url += "&zone=" + zoneParam;
-
-    // Reset on-timer should ideally be done AFTER successful sync
-    zones[i].tAccu = 0;
   }
 
   tLastSync = tNow;
@@ -362,31 +367,33 @@ void synchronizeWithRemote() {
       if (JSON.typeof(json) == "object") {
 
         for (int i = 0; i < numZones; i++) {
+          // Skip zones without Nexas
+          if (zones[i].nexas[0] == 0)
+            continue;
+
           // TODO: Should skip zone if not found in response
-          if (zones[i].nexas[0] != 0) {
-            int rawValue = (int)json[String("zone.") + zones[i].name];
-            int value = normalizeValue(rawValue, i);
-            if (rawValue != value) {
-              tNextSync = 0;
-              doReverseSync = true;
-            }
+          int rawValue = (int)json[String("zone.") + zones[i].name];
+          int value = normalizeValue(rawValue, i);
+          if (rawValue != value) {
+            tNextSync = 0;
+            doReverseSync = true;
+          }
 
-            DEBUG_PRINTF("<- Zone %s: %d (raw: %d, prev: %d)\n", zones[i].name, value, rawValue, zones[i].value);
+          DEBUG_PRINTF("<- Zone %s: %d (raw: %d, prev: %d)\n", zones[i].name, value, rawValue, zones[i].value);
 
-            // Set new value, save prefs and trigger update of Nexas
-            if (value != zones[i].value) {
-              zones[i].value = value;
-              savePrefsPending = true;
-              tNextNexaUpdate = 0;
-            }
-            if (i == 0) {
-              byte currTemp = setTemp;
-              byte currMode = setMode;
-              setTemp = zones[0].value;
-              setMode = setTemp >= minTemp[1] ? 1 : 0;
-              if (setMode != currMode) {
-                prevTemp = currTemp;
-              }
+          // Set new value, save prefs and trigger update of Nexas
+          if (value != zones[i].value) {
+            zones[i].value = value;
+            savePrefsPending = true;
+            tNextNexaUpdate = 0;
+          }
+          if (i == 0) {
+            byte currTemp = setTemp;
+            byte currMode = setMode;
+            setTemp = zones[0].value;
+            setMode = setTemp >= minTemp[1] ? 1 : 0;
+            if (setMode != currMode) {
+              prevTemp = currTemp;
             }
           }
         }

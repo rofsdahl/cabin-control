@@ -1,3 +1,4 @@
+
 #include <Preferences.h>
 #include <WiFi.h>
 #include <TFT_eSPI.h>
@@ -294,7 +295,7 @@ void synchronizeWithRemote() {
 
   unsigned long tNow = millis();
 
-  //TODO: Support using dev script also (is it always valid?)
+  // TODO: Support using dev script also (is it always valid?)
   String url = "https://script.google.com/macros/s/" APPS_SCRIPT_ID "/exec?uptime=";
   url += getUptimeMillis() / 1000;
 
@@ -313,12 +314,12 @@ void synchronizeWithRemote() {
         zones[i].tOn = tNow;
       }
 
-      // TODO: Integer division with rounding (995/1000 = 100%)
+      // TODO: Integer division with rounding (995/1000 should be 100%)
       dutyCyclePercent = zones[i].tAccu * 100 / (tNow - tLastSync);
       DEBUG_PRINTF(".. Zone %s duty cycle = %d %% (%d*100/(%d-%d))\n", zones[i].name, dutyCyclePercent, zones[i].tAccu, tNow, tLastSync);
     }
 
-    // TODO: Add reverse sync of all zones (may overwrite cell formulas)
+    // TODO: Support reverse sync of all zones? (may overwrite cell formulas)
     // TODO: Report duty cycle for all zones with sensor and Nexa(s)
     String zoneParam = urlEncode(zones[i].name) + ";";
     // Reverse sync value, blank if no reverse sync or "NA" for zone without Nexas
@@ -361,7 +362,7 @@ void synchronizeWithRemote() {
       if (JSON.typeof(json) == "object") {
 
         for (int i = 0; i < numZones; i++) {
-          // TODO: Should skip zone if not found in reponse
+          // TODO: Should skip zone if not found in response
           if (zones[i].nexas[0] != 0) {
             int rawValue = (int)json[String("zone.") + zones[i].name];
             int value = normalizeValue(rawValue, i);
@@ -402,7 +403,7 @@ void synchronizeWithRemote() {
       url = http.header("Location");
     }
 
-    // TODO: Improve error handling. Have seen -11, meaning what? timeout ?
+    // TODO: Improve error handling. Have seen -11, meaning what? timeout?
     // TODO: 4xx from Google should also be handled
     // TODO: Display error status on device
     // TODO: Add reference to HTTPClient doc

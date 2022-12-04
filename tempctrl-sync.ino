@@ -49,6 +49,7 @@ byte prevTemp;
 int syncIntervalMin = 60;
 bool doReverseSync = false;
 bool savePrefsPending = false;
+bool wifiSuccess = false;
 int errCount = 0;
 unsigned long tLastTempRead = 0;
 unsigned long tLastNexaUpdate = 0;
@@ -56,6 +57,7 @@ unsigned long tLastNtpSync = 0;
 unsigned long tLastSync = 0;
 unsigned long tLastReport = 0;
 unsigned long tLastDisplayUpdate = 0;
+unsigned long tLastWifiFailure = 0;
 
 const byte minTemp[] = { 5, 16};
 const byte maxTemp[] = {15, 25};
@@ -67,6 +69,7 @@ const unsigned long ntpSyncInterval = 24 * HOUR;
 const unsigned long displayDimTimeout = 1 * MIN;
 const unsigned long keypressTimeout = 5 * SEC;
 const unsigned long wifiConnectTimeout = 10 * SEC;
+const unsigned long wifiRetryTimeout = 1 * MIN;
 const unsigned long httpResponseTimeout = 20 * SEC;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -79,14 +82,18 @@ void enableWiFi() {
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   unsigned long tStart = millis();
-  while (millis() - tStart <= wifiConnectTimeout) {
+  while (millis() - tStart < wifiConnectTimeout) {
     if (WiFi.status() == WL_CONNECTED) {
       DEBUG_PRINTF("-> IP address: %s\n", WiFi.localIP().toString());
+      tLastWifiFailure = millis() - wifiRetryTimeout;
+      wifiSuccess = true;
       return;
     }
     delay(100);
   }
   DEBUG_PRINTLN("-> FAILED!");
+  tLastWifiFailure = millis();
+  wifiSuccess = false;
 }
 
 void disableWiFi() {
@@ -432,10 +439,13 @@ void controlTask(void *params) {
   tLastNexaUpdate = millis() - nexaUpdateInterval;
   tLastNtpSync = millis() - ntpSyncInterval;
   tLastSync = millis() - syncIntervalMin * MIN;
+  tLastWifiFailure = millis() - wifiRetryTimeout;
 
   int dayMinDone = -1;
 
   while (true) {
+    vTaskDelay(10);
+
     if (savePrefsPending) {
       savePrefsPending = false;
       savePreferences();
@@ -458,6 +468,11 @@ void controlTask(void *params) {
     int dayMin = timeinfo.tm_hour * 60 + timeinfo.tm_min;
 
     bool doScheduledSync = dayMin % syncIntervalMin == 0 && dayMin != dayMinDone;
+
+    if (millis() - tLastWifiFailure < wifiRetryTimeout) {
+      continue;
+    }
+
     if (doScheduledSync || millis() - tLastSync >= syncIntervalMin * MIN) {
 
       activity = WIFI;
@@ -483,8 +498,6 @@ void controlTask(void *params) {
 
       disableWiFi();
     }
-
-    vTaskDelay(10);
   }
 }
 
@@ -535,10 +548,11 @@ void buttonTask(void *params) {
   rightBtn.setPressedHandler(increaseTemp);
 
   while (true) {
+    vTaskDelay(1);
+
     backlight.loop();
     leftBtn.loop();
     rightBtn.loop();
-    vTaskDelay(1);
   }
 }
 
@@ -550,6 +564,8 @@ void displayTask(void *params) {
   bool isFirstDisplay = true;
 
   while (true) {
+    vTaskDelay(1);
+
     if (millis() - tLastDisplayUpdate >= displayUpdateInterval) {
       tLastDisplayUpdate = millis();
 
@@ -657,13 +673,12 @@ void displayTask(void *params) {
       else if (activity == TIME) text = "Time";
       else if (activity == SYNC) text = "Sync";
 
-      tft.setTextColor(TFT_GREEN, TFT_BLACK);
+      tft.setTextColor(wifiSuccess ? TFT_GREEN : TFT_RED, TFT_BLACK);
       tft.setTextDatum(TR_DATUM);
       x = tft.drawString(text, 135, y, 2);
       tft.fillRect(100, y, 35 - x, 16, TFT_BLACK);
     }
     isFirstDisplay = false;
-    vTaskDelay(1);
   }
 }
 
@@ -850,7 +865,7 @@ void setup() {
   tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
 
   unsigned long tStart = millis();
-  while (millis() - tStart <= keypressTimeout) {
+  while (millis() - tStart < keypressTimeout) {
     tft.drawNumber((tStart + keypressTimeout - millis()) / 1000, 0, 136, 4);
     if (digitalRead(PIN_LEFT_BUTTON) == LOW) {
       menuSystem();

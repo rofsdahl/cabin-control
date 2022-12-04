@@ -1,8 +1,6 @@
 #ifndef TYPEDEF_H
 #define TYPEDEF_H
 
-#include "nexa-tx.h"
-
 #define NEXAS_PER_ZONE 2
 
 typedef struct {

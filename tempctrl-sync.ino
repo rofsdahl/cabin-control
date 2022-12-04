@@ -1,4 +1,3 @@
-
 #include <Preferences.h>
 #include <WiFi.h>
 #include <TFT_eSPI.h>
@@ -21,14 +20,6 @@
 #define PIN_SENSOR        25
 #define PIN_TX            26
 
-#define INTERVAL_DISPLAY_UPDATE              1 * 1000
-#define INTERVAL_TEMP_READING                5 * 1000
-#define INTERVAL_NEXA_UPDATE            5 * 60 * 1000
-#define INTERVAL_TIME_ADJUSTMENT  24 * 60 * 60 * 1000
-#define TIMEOUT_KEYPRESS                     5 * 1000
-#define TIMEOUT_WIFI_CONNECT                10 * 1000
-#define TIMEOUT_HTTP                        20 * 1000
-
 #ifdef DEBUG
 #define DEBUG_BEGIN(...)   Serial.begin(__VA_ARGS__)
 #define DEBUG_PRINTF(...)  Serial.printf(__VA_ARGS__)
@@ -38,6 +29,10 @@
 #define DEBUG_PRINTF(...)  // Blank line - no code
 #define DEBUG_PRINTLN(...) // Blank line - no code
 #endif
+
+#define SEC               (1000UL * 1)
+#define MIN               (1000UL * 60)
+#define HOUR              (1000UL * 60 * 60)
 
 Preferences preferences;
 TFT_eSPI tft = TFT_eSPI();
@@ -51,19 +46,28 @@ Activity activity = NONE;
 byte setMode;
 byte setTemp;
 byte prevTemp;
-byte minTemp[] = { 5, 16};
-byte maxTemp[] = {15, 25};
-int syncInterval = 60;
+int syncIntervalMin = 60;
 bool doReverseSync = false;
 bool savePrefsPending = false;
-unsigned long tNextTempReading = 0;
-unsigned long tNextNexaUpdate = 0;
-unsigned long tNextSync = 0;
-unsigned long tNextTimeAdjustment = 0;
-unsigned long tLastSync = 0;
-unsigned long tNextDisplayUpdate = 0;
 int errCount = 0;
-int numZones = sizeof(zones) / sizeof(zones[0]);
+unsigned long tLastTempRead = 0;
+unsigned long tLastNexaUpdate = 0;
+unsigned long tLastNtpSync = 0;
+unsigned long tLastSync = 0;
+unsigned long tLastReport = 0;
+unsigned long tLastDisplayUpdate = 0;
+
+const byte minTemp[] = { 5, 16};
+const byte maxTemp[] = {15, 25};
+const int numZones = sizeof(zones) / sizeof(zones[0]);
+const unsigned long displayUpdateInterval = 1 * SEC;
+const unsigned long tempReadInterval = 5 * SEC;
+const unsigned long nexaUpdateInterval = 5 * MIN;
+const unsigned long ntpSyncInterval = 24 * HOUR;
+const unsigned long displayDimTimeout = 1 * MIN;
+const unsigned long keypressTimeout = 5 * SEC;
+const unsigned long wifiConnectTimeout = 10 * SEC;
+const unsigned long httpResponseTimeout = 20 * SEC;
 
 ////////////////////////////////////////////////////////////////////////////////
 void enableWiFi() {
@@ -74,8 +78,8 @@ void enableWiFi() {
   DEBUG_PRINTLN("Connecting to WiFi...");
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-  unsigned long tTimeout = millis() + TIMEOUT_WIFI_CONNECT;
-  while (millis() < tTimeout) {
+  unsigned long tStart = millis();
+  while (millis() - tStart <= wifiConnectTimeout) {
     if (WiFi.status() == WL_CONNECTED) {
       DEBUG_PRINTF("-> IP address: %s\n", WiFi.localIP().toString());
       return;
@@ -311,8 +315,8 @@ void synchronizeWithRemote() {
         zones[i].tOn = tNow;
       }
       // TODO: Integer division with rounding (995/1000 should be 100%)
-      dutyCyclePercent = zones[i].tAccu * 100 / (tNow - tLastSync);
-      DEBUG_PRINTF(".. Zone %s duty cycle = %d %% (%d*100/(%d-%d))\n", zones[i].name, dutyCyclePercent, zones[i].tAccu, tNow, tLastSync);
+      dutyCyclePercent = zones[i].tAccu * 100 / (tNow - tLastReport);
+      DEBUG_PRINTF(".. Zone %s duty cycle = %d %% (%d*100/(%d-%d))\n", zones[i].name, dutyCyclePercent, zones[i].tAccu, tNow, tLastReport);
       zones[i].tAccu = 0;
     }
 
@@ -339,7 +343,7 @@ void synchronizeWithRemote() {
     url += "&zone=" + zoneParam;
   }
 
-  tLastSync = tNow;
+  tLastReport = tNow;
   doReverseSync = false;
 
   int responseCode = 0;
@@ -351,7 +355,7 @@ void synchronizeWithRemote() {
     DEBUG_PRINTF("HTTP request: %s\n", url.c_str());
     const char * headerKeys[] = {"Location"};
     http.collectHeaders(headerKeys, sizeof(headerKeys) / sizeof(char*));
-    http.setTimeout(TIMEOUT_HTTP);
+    http.setTimeout(httpResponseTimeout);
     responseCode = http.GET();
     DEBUG_PRINTF("HTTP response code: %d\n", responseCode);
 
@@ -373,7 +377,8 @@ void synchronizeWithRemote() {
           int rawValue = (int)json[String("zone.") + zones[i].name];
           int value = normalizeValue(rawValue, i);
           if (rawValue != value) {
-            tNextSync = 0;
+            // Value normalized - trigger another sync to update sheet
+            tLastSync = millis() - syncIntervalMin * MIN;
             doReverseSync = true;
           }
 
@@ -383,7 +388,7 @@ void synchronizeWithRemote() {
           if (value != zones[i].value) {
             zones[i].value = value;
             savePrefsPending = true;
-            tNextNexaUpdate = 0;
+            tLastNexaUpdate = millis() - nexaUpdateInterval;
           }
           if (i == 0) {
             byte currTemp = setTemp;
@@ -399,7 +404,7 @@ void synchronizeWithRemote() {
         int value = (int)json["syncInterval"];
         DEBUG_PRINTF("<- Sync Interval: %d\n", value);
         if (value > 0) {
-          syncInterval = value;
+          syncIntervalMin = value;
         }
       }
     }
@@ -408,7 +413,7 @@ void synchronizeWithRemote() {
       url = http.header("Location");
     }
 
-    // TODO: Improve error handling. Have seen -11, meaning what? timeout?
+    // TODO: Improve error handling. Have seen -1 and -11, meaning what? Timeout?
     // TODO: 4xx from Google should also be handled
     // TODO: Display error status on device
     // TODO: Add reference to HTTPClient doc
@@ -422,6 +427,12 @@ void synchronizeWithRemote() {
 }
 
 void controlTask(void *params) {
+
+  tLastTempRead = millis() - tempReadInterval;
+  tLastNexaUpdate = millis() - nexaUpdateInterval;
+  tLastNtpSync = millis() - ntpSyncInterval;
+  tLastSync = millis() - syncIntervalMin * MIN;
+
   int dayMinDone = -1;
 
   while (true) {
@@ -430,14 +441,14 @@ void controlTask(void *params) {
       savePreferences();
     }
 
-    if (millis() > tNextTempReading) {
-      tNextTempReading = millis() + INTERVAL_TEMP_READING;
+    if (millis() - tLastTempRead >= tempReadInterval) {
+      tLastTempRead = millis();
       readTemperatures();
     }
 
-    if (millis() > tNextNexaUpdate) {
+    if (millis() - tLastNexaUpdate >= nexaUpdateInterval) {
       activity = NEXA;
-      tNextNexaUpdate = millis() + INTERVAL_NEXA_UPDATE;
+      tLastNexaUpdate = millis();
       updateNexas();
       activity = NONE;
     }
@@ -446,8 +457,8 @@ void controlTask(void *params) {
     getLocalTime(&timeinfo, 100);
     int dayMin = timeinfo.tm_hour * 60 + timeinfo.tm_min;
 
-    bool doScheduledSync = dayMin % syncInterval == 0 && dayMin != dayMinDone;
-    if (doScheduledSync || millis() > tNextSync) {
+    bool doScheduledSync = dayMin % syncIntervalMin == 0 && dayMin != dayMinDone;
+    if (doScheduledSync || millis() - tLastSync >= syncIntervalMin * MIN) {
 
       activity = WIFI;
       enableWiFi();
@@ -456,16 +467,16 @@ void controlTask(void *params) {
       if (WiFi.status() == WL_CONNECTED) {
 
         // NTP sync at 03:00
-        if (dayMin == 3 * 60 || millis() > tNextTimeAdjustment) {
+        if (dayMin == 3 * 60 || millis() - tLastNtpSync >= ntpSyncInterval) {
           activity = TIME;
-          tNextTimeAdjustment = millis() + INTERVAL_TIME_ADJUSTMENT;
+          tLastNtpSync = millis();
           adjustTime();
           activity = NONE;
         }
 
         activity = SYNC;
+        tLastSync = millis();
         dayMinDone = dayMin;
-        tNextSync = millis() + syncInterval * 60 * 1000;
         synchronizeWithRemote();
         activity = NONE;
       }
@@ -488,11 +499,12 @@ void toggleMode(Button2& btn) {
     prevTemp = zones[0].value;
     zones[0].value = setTemp;
 
-    tNextDisplayUpdate = millis();
-    savePrefsPending = true;
-    tNextNexaUpdate = millis() + TIMEOUT_KEYPRESS;
-    tNextSync = millis() + TIMEOUT_KEYPRESS;
+    // Trigger update of display, Nexas and remote sync
+    tLastDisplayUpdate = millis() - displayUpdateInterval;
+    tLastNexaUpdate = millis() - nexaUpdateInterval + keypressTimeout;
+    tLastSync = millis() - syncIntervalMin * MIN + keypressTimeout;
     doReverseSync = true;
+    savePrefsPending = true;
   }
 }
 
@@ -506,11 +518,12 @@ void increaseTemp(Button2& btn) {
     }
     zones[0].value = setTemp;
 
-    tNextDisplayUpdate = millis();
-    savePrefsPending = true;
-    tNextNexaUpdate = millis() + TIMEOUT_KEYPRESS;
-    tNextSync = millis() + TIMEOUT_KEYPRESS;
+    // Trigger update of display, Nexas and remote sync
+    tLastDisplayUpdate = millis() - displayUpdateInterval;
+    tLastNexaUpdate = millis() - nexaUpdateInterval + keypressTimeout;
+    tLastSync = millis() - syncIntervalMin * MIN + keypressTimeout;
     doReverseSync = true;
+    savePrefsPending = true;
   }
 }
 
@@ -533,10 +546,13 @@ void buttonTask(void *params) {
 
 void displayTask(void *params) {
   tft.fillScreen(TFT_BLACK);
-  backlight.begin(TFT_BL, 8, 20, 255, 60 * 1000); // 60 sec
+  backlight.begin(TFT_BL, 8, 20, 255, displayDimTimeout);
+  bool isFirstDisplay = true;
 
   while (true) {
-    if (millis() > tNextDisplayUpdate) {
+    if (millis() - tLastDisplayUpdate >= displayUpdateInterval) {
+      tLastDisplayUpdate = millis();
+
       struct tm timeinfo;
       getLocalTime(&timeinfo, 100);
       char buf[20];
@@ -614,8 +630,8 @@ void displayTask(void *params) {
       int n = 0;
       for (int i = 0; i < numZones; i++) {
         if (zones[i].nexas[0] != 0) {
-          // Eensure display of initial Nexa state (value is 0 at boot time)
-          if (zones[i].state != zones[i].lastDisplayedState || tNextDisplayUpdate == 0) {
+          // Ensure display of initial Nexa state
+          if (zones[i].state != zones[i].lastDisplayedState || isFirstDisplay) {
             if (zones[i].state) {
               tft.fillCircle(n * 20 + 8, y + 8, 8, TFT_YELLOW);
               tft.setTextColor(TFT_BLACK);
@@ -645,9 +661,8 @@ void displayTask(void *params) {
       tft.setTextDatum(TR_DATUM);
       x = tft.drawString(text, 135, y, 2);
       tft.fillRect(100, y, 35 - x, 16, TFT_BLACK);
-
-      tNextDisplayUpdate = millis() + INTERVAL_DISPLAY_UPDATE;
     }
+    isFirstDisplay = false;
     vTaskDelay(1);
   }
 }
@@ -824,25 +839,27 @@ void setup() {
   tft.setTextSize(1);
   tft.fillScreen(TFT_BLACK);
   tft.setTextDatum(TL_DATUM);
-  tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
   tft.drawString("Cabin Ctrl.", 0, 0, 4);
-  tft.drawLine(0, 26, 135, 26, TFT_LIGHTGREY);
-  tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+  tft.drawLine(0, 26, 135, 26, TFT_YELLOW);
+  tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
   tft.drawString(__DATE__, 0, 32, 4);
   tft.drawString(__TIME__, 0, 58, 4);
-  tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
   tft.drawString("M: Menu...", 0, 110, 4);
-  tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+  tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
 
-  unsigned long timeout = millis() + TIMEOUT_KEYPRESS;
-  while (millis() < timeout) {
-    tft.drawNumber((timeout - millis()) / 1000, 0, 136, 4);
+  unsigned long tStart = millis();
+  while (millis() - tStart <= keypressTimeout) {
+    tft.drawNumber((tStart + keypressTimeout - millis()) / 1000, 0, 136, 4);
     if (digitalRead(PIN_LEFT_BUTTON) == LOW) {
       menuSystem();
     }
   }
 
-  DEBUG_PRINTLN("*** Cabin Control ***");
+  DEBUG_PRINTLN("*******************");
+  DEBUG_PRINTLN("*** Cabin Ctrl. ***");
+  DEBUG_PRINTLN("*******************");
 
   preferences.begin("temp");
   restorePreferences();

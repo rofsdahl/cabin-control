@@ -49,7 +49,7 @@ byte prevTemp;
 int syncIntervalMin = 60;
 bool doReverseSync = false;
 bool savePrefsPending = false;
-bool wifiSuccess = false;
+bool wifiSuccess = true;
 int errCount = 0;
 unsigned long tLastTempRead = 0;
 unsigned long tLastNexaUpdate = 0;
